@@ -171,16 +171,17 @@ p {
   gap: 1.5rem;
   padding: 1.5rem;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.58));
-  pointer-events: none;
 }
 
 .feed-overlay-main {
   max-width: 60ch;
+  pointer-events: none;
 }
 
 .feed-overlay-side {
   display: grid;
   gap: 0.75rem;
+  pointer-events: auto;
 }
 
 .feed-metric {
@@ -459,6 +460,7 @@ p {
   color: white;
   padding: 0.8rem 0.95rem;
   min-width: 76px;
+  pointer-events: auto;
 }
 
 .feed-icon-button span {
@@ -481,6 +483,7 @@ p {
   background: rgba(255, 255, 255, 0.12);
   padding: 0.8rem 0.95rem;
   min-width: 76px;
+  pointer-events: auto;
 }
 
 .feed-match-pill strong {

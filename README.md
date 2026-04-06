@@ -65,10 +65,12 @@ Pulse is now prepared for a Capacitor wrapper so you can test it privately in th
 Add this value to your local env when preparing native builds:
 
 ```env
+NEXT_PUBLIC_SITE_URL=https://your-live-site.vercel.app
 CAPACITOR_LIVE_URL=https://your-pulse-site.vercel.app
 ```
 
-This tells the native shell which live Pulse deployment to load.
+`NEXT_PUBLIC_SITE_URL` is also important for Supabase email verification links so new users land on your live site instead of localhost.
+`CAPACITOR_LIVE_URL` tells the native shell which live Pulse deployment to load.
 
 ### Native commands
 
