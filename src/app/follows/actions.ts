@@ -85,9 +85,5 @@ export async function toggleFollowInline(targetUserId: string) {
     });
   }
 
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/feed");
-
   return { ok: true, requiresAuth: false, following: !existingFollow };
 }

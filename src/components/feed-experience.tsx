@@ -200,16 +200,21 @@ export function FeedExperience({
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
   const [dismissedGuestGate, setDismissedGuestGate] = useState(false);
   const [localFeedCards, setLocalFeedCards] = useState(feedCards);
-  const [pendingLikeIds, setPendingLikeIds] = useState<string[]>([]);
-  const [pendingFollowIds, setPendingFollowIds] = useState<string[]>([]);
+  const modifiedIdsRef = useRef<Set<string>>(new Set());
   const activeId = localFeedCards[activeIndex]?.id ?? "";
 
-  // Sync feed cards from server
+  // Sync feed cards from server, but preserve locally-modified items
   useEffect(() => {
-    if (pendingLikeIds.length === 0 && pendingFollowIds.length === 0) {
-      setLocalFeedCards(feedCards);
-    }
-  }, [feedCards, pendingLikeIds.length, pendingFollowIds.length]);
+    setLocalFeedCards((current) => {
+      const currentById = new Map(current.map((c) => [c.id, c]));
+      return feedCards.map((serverCard) => {
+        if (modifiedIdsRef.current.has(serverCard.id)) {
+          return currentById.get(serverCard.id) ?? serverCard;
+        }
+        return serverCard;
+      });
+    });
+  }, [feedCards]);
 
   // IntersectionObserver for snap detection
   useEffect(() => {
@@ -243,6 +248,7 @@ export function FeedExperience({
       const nextLiked = !card.likedByCurrentUser;
       const nextCount = Math.max(0, card.likesCount + (nextLiked ? 1 : -1));
 
+      modifiedIdsRef.current.add(videoId);
       setLocalFeedCards((cards) =>
         cards.map((c) =>
           c.id === videoId
@@ -258,22 +264,21 @@ export function FeedExperience({
             : c,
         ),
       );
-      setPendingLikeIds((ids) => [...new Set([...ids, videoId])]);
 
       try {
         const result = await toggleLikeInline(videoId);
         if (!result.ok) {
+          modifiedIdsRef.current.delete(videoId);
           setLocalFeedCards((cards) =>
             cards.map((c) => (c.id === videoId ? card : c)),
           );
           if (result.requiresAuth) router.push("/auth/login");
         }
       } catch {
+        modifiedIdsRef.current.delete(videoId);
         setLocalFeedCards((cards) =>
           cards.map((c) => (c.id === videoId ? card : c)),
         );
-      } finally {
-        setPendingLikeIds((ids) => ids.filter((id) => id !== videoId));
       }
     },
     [localFeedCards, router],
@@ -286,7 +291,12 @@ export function FeedExperience({
       const card = localFeedCards[idx];
       const nextFollowed = !card.followedCreatorByCurrentUser;
 
-      // Optimistically toggle all cards by the same creator
+      // Mark all cards by this creator as locally modified
+      const creatorCardIds = localFeedCards
+        .filter((c) => c.creatorId === creatorId)
+        .map((c) => c.id);
+      for (const id of creatorCardIds) modifiedIdsRef.current.add(id);
+
       setLocalFeedCards((cards) =>
         cards.map((c) =>
           c.creatorId === creatorId
@@ -294,11 +304,11 @@ export function FeedExperience({
             : c,
         ),
       );
-      setPendingFollowIds((ids) => [...new Set([...ids, creatorId])]);
 
       try {
         const result = await toggleFollowInline(creatorId);
         if (!result.ok) {
+          for (const id of creatorCardIds) modifiedIdsRef.current.delete(id);
           setLocalFeedCards((cards) =>
             cards.map((c) =>
               c.creatorId === creatorId
@@ -309,6 +319,7 @@ export function FeedExperience({
           if (result.requiresAuth) router.push("/auth/login");
         }
       } catch {
+        for (const id of creatorCardIds) modifiedIdsRef.current.delete(id);
         setLocalFeedCards((cards) =>
           cards.map((c) =>
             c.creatorId === creatorId
@@ -316,8 +327,6 @@ export function FeedExperience({
               : c,
           ),
         );
-      } finally {
-        setPendingFollowIds((ids) => ids.filter((id) => id !== creatorId));
       }
     },
     [localFeedCards, router],
@@ -389,7 +398,6 @@ export function FeedExperience({
                         ? "feed-icon-button active"
                         : "feed-icon-button"
                     }
-                    disabled={pendingLikeIds.includes(post.id)}
                     onClick={() => void handleLike(post.id)}
                     type="button"
                   >
@@ -451,7 +459,6 @@ export function FeedExperience({
                           ? "feed-icon-button follow-active"
                           : "feed-icon-button"
                       }
-                      disabled={pendingFollowIds.includes(post.creatorId)}
                       onClick={() => void handleFollow(post.creatorId)}
                       type="button"
                     >
