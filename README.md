@@ -1,6 +1,6 @@
-# PulsePlay Next
+# Pulse
 
-This is the real `Next.js` foundation for PulsePlay, a social video platform with short-form uploads, creator feeds, comments, follows, messaging, and a recommendation system.
+This is the real `Next.js` foundation for Pulse, a mobile-first social app for short-form uploads, creator feeds, comments, follows, messaging, and recommendation-driven discovery.
 
 ## Current status
 
@@ -55,6 +55,36 @@ npm.cmd run dev
 npm.cmd run lint
 npm.cmd run build
 ```
+
+## Native app setup
+
+Pulse is now prepared for a Capacitor wrapper so you can test it privately in the App Store and Google Play before going public.
+
+### Environment
+
+Add this value to your local env when preparing native builds:
+
+```env
+CAPACITOR_LIVE_URL=https://your-pulse-site.vercel.app
+```
+
+This tells the native shell which live Pulse deployment to load.
+
+### Native commands
+
+```powershell
+npm.cmd run cap:sync
+npm.cmd run cap:android
+npm.cmd run cap:ios
+```
+
+### Notes
+
+- `android/` can be created and worked with from Windows.
+- `ios/` should be added and built on a Mac with Xcode.
+- For private testing:
+  - iPhone: use `TestFlight`
+  - Android: use `Closed testing`
 
 ## What to build next
 

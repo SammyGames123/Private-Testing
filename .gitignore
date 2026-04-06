@@ -22,6 +22,15 @@
 
 # production
 /build
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/local.properties
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/DerivedData/
 
 # misc
 .DS_Store

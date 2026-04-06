@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     ".pulseplay-build-v3/**",
     "out/**",
     "build/**",
+    "android/app/src/main/assets/public/**",
+    "android/app/build/**",
+    "android/build/**",
+    "ios/App/App/public/**",
     "next-env.d.ts",
   ]),
 ]);
