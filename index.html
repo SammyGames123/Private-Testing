@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulsePlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="background-orb orb-a"></div>
+  <div class="background-orb orb-b"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">GitHub Pages-ready</p>
+        <h1>PulsePlay</h1>
+        <p class="lede">A creator-first video platform demo with uploads, social features, DMs, and a local recommendation engine.</p>
+      </div>
+
+      <nav class="nav-grid">
+        <button class="nav-card is-active" data-view="feed">
+          <span class="nav-title">For You</span>
+          <span class="nav-copy">Ranked for each viewer</span>
+        </button>
+        <button class="nav-card" data-view="following">
+          <span class="nav-title">Following</span>
+          <span class="nav-copy">Creators you follow</span>
+        </button>
+        <button class="nav-card" data-view="upload">
+          <span class="nav-title">Studio</span>
+          <span class="nav-copy">Upload and edit clips</span>
+        </button>
+        <button class="nav-card" data-view="messages">
+          <span class="nav-title">Direct Messages</span>
+          <span class="nav-copy">Private conversations</span>
+        </button>
+      </nav>
+
+      <section class="profile-card" id="profileCard"></section>
+      <section class="algorithm-card" id="algorithmCard"></section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Social video prototype</p>
+          <h2>Build a YouTube + TikTok + Instagram-style experience on static hosting.</h2>
+        </div>
+        <div class="hero-pills">
+          <span>Uploads</span>
+          <span>Editing</span>
+          <span>Likes</span>
+          <span>Comments</span>
+          <span>Followers</span>
+          <span>DMs</span>
+          <span>Ranking</span>
+        </div>
+      </header>
+
+      <section class="composer card" id="uploadView">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Creator Studio</p>
+            <h3>Upload a clip and tune how it plays in the feed</h3>
+          </div>
+          <p class="section-copy">Local file uploads work instantly in the current browser session. Remote video URLs persist across refreshes.</p>
+        </div>
+
+        <form id="uploadForm" class="upload-form">
+          <label>
+            Title
+            <input type="text" name="title" placeholder="Night market neon edit" required>
+          </label>
+          <label>
+            Caption
+            <textarea name="caption" rows="3" placeholder="Tell people what makes this clip worth watching"></textarea>
+          </label>
+          <div class="two-up">
+            <label>
+              Category
+              <select name="category">
+                <option value="music">Music</option>
+                <option value="gaming">Gaming</option>
+                <option value="food">Food</option>
+                <option value="travel">Travel</option>
+                <option value="fashion">Fashion</option>
+                <option value="education">Education</option>
+                <option value="fitness">Fitness</option>
+                <option value="comedy">Comedy</option>
+              </select>
+            </label>
+            <label>
+              Tags
+              <input type="text" name="tags" placeholder="city, neon, vlog">
+            </label>
+          </div>
+          <div class="two-up">
+            <label>
+              Upload local video
+              <input type="file" name="videoFile" accept="video/*">
+            </label>
+            <label>
+              Or paste video URL
+              <input type="url" name="videoUrl" placeholder="https://...mp4">
+            </label>
+          </div>
+
+          <div class="editor-grid">
+            <div class="editor-panel">
+              <h4>Playback editing</h4>
+              <label>
+                Start trim (sec)
+                <input type="range" name="trimStart" min="0" max="45" value="0">
+              </label>
+              <label>
+                End trim (sec)
+                <input type="range" name="trimEnd" min="5" max="60" value="20">
+              </label>
+              <label>
+                Speed
+                <input type="range" name="playbackRate" min="0.5" max="2" step="0.25" value="1">
+              </label>
+              <label>
+                Filter
+                <select name="filter">
+                  <option value="none">Clean</option>
+                  <option value="cinematic">Cinematic</option>
+                  <option value="vivid">Vivid</option>
+                  <option value="mono">Monochrome</option>
+                  <option value="warm">Warm glow</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="preview-panel">
+              <div class="preview-stage">
+                <video id="editorPreview" controls muted playsinline></video>
+              </div>
+              <div class="preview-stats" id="previewStats"></div>
+            </div>
+          </div>
+
+          <button type="submit" class="primary-button">Publish video</button>
+        </form>
+      </section>
+
+      <section class="content-grid">
+        <section class="feed-column">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Feed</p>
+              <h3 id="feedTitle">Recommended for you</h3>
+            </div>
+            <div class="toggle-row">
+              <button class="toggle is-active" data-feed="for-you">For You</button>
+              <button class="toggle" data-feed="following">Following</button>
+            </div>
+          </div>
+          <div id="feedList" class="feed-list"></div>
+        </section>
+
+        <aside class="side-column">
+          <section class="card creators-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Creators</p>
+                <h3>Suggested people to follow</h3>
+              </div>
+            </div>
+            <div id="creatorList" class="creator-list"></div>
+          </section>
+
+          <section class="card comments-card">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Conversation</p>
+                <h3>Live comments</h3>
+              </div>
+            </div>
+            <div id="commentFocus" class="comment-focus"></div>
+          </section>
+
+          <section class="card messages-card" id="messagesView">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Inbox</p>
+                <h3>Direct messages</h3>
+              </div>
+            </div>
+            <div id="messageThreads" class="message-threads"></div>
+            <form id="messageForm" class="message-form">
+              <select name="recipient" id="messageRecipient"></select>
+              <textarea name="message" rows="3" placeholder="Send a quick note"></textarea>
+              <button type="submit" class="secondary-button">Send message</button>
+            </form>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <template id="feedCardTemplate">
+    <article class="feed-card card">
+      <div class="feed-media">
+        <video playsinline controls preload="metadata"></video>
+      </div>
+      <div class="feed-body">
+        <div class="feed-meta">
+          <div>
+            <p class="creator-line"></p>
+            <h4></h4>
+          </div>
+          <span class="score-chip"></span>
+        </div>
+        <p class="caption"></p>
+        <div class="tag-row"></div>
+        <div class="action-row">
+          <button class="like-button"></button>
+          <button class="comment-button">Comment</button>
+          <button class="follow-button"></button>
+          <button class="message-button">Message creator</button>
+        </div>
+        <form class="comment-form">
+          <input type="text" name="comment" placeholder="Add a comment">
+          <button type="submit" class="secondary-button">Post</button>
+        </form>
+        <div class="comment-list"></div>
+      </div>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
