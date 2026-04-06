@@ -98,6 +98,7 @@ p {
 
 .feed-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at top left, rgba(245, 107, 51, 0.22), transparent 24%),
     linear-gradient(180deg, #081116 0%, #0f1f24 100%);
@@ -117,6 +118,7 @@ p {
 
 .feed-scroll {
   height: calc(100vh - 88px);
+  height: calc(100dvh - 88px);
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   padding: 1rem;
@@ -125,6 +127,7 @@ p {
 .feed-slide {
   scroll-snap-align: start;
   min-height: calc(100vh - 120px);
+  min-height: calc(100dvh - 120px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -575,25 +578,41 @@ p {
   .feed-topbar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.75rem 0.75rem 0;
   }
 
   .feed-slide {
-    min-height: auto;
+    min-height: calc(100vh - 152px);
+    min-height: calc(100dvh - 152px);
+    align-items: flex-start;
+    padding-bottom: 0.4rem;
+  }
+
+  .feed-scroll {
+    height: calc(100vh - 132px);
+    height: calc(100dvh - 132px);
+    padding: 0.55rem 0.75rem 0.6rem;
   }
 
   .feed-video-card {
-    height: auto;
-    min-height: calc(100vh - 150px);
+    width: 100%;
+    height: calc(100vh - 188px);
+    height: calc(100dvh - 188px);
+    min-height: 540px;
+    border-radius: 26px;
   }
 
   .feed-overlay {
-    flex-direction: column;
-    align-items: flex-start;
+    align-items: end;
+    padding: 1rem;
   }
 
   .feed-overlay-side {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    width: 100%;
+    position: absolute;
+    right: 0.8rem;
+    bottom: 1rem;
+    width: auto;
   }
 
   .feed-actions {
@@ -602,9 +621,24 @@ p {
     padding: 1rem;
   }
 
-  .feed-overlay-icons {
+  .feed-overlay-main {
     width: 100%;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: none;
+    padding-right: 5.3rem;
+  }
+
+  .feed-overlay-main h2 {
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  .feed-overlay-main p {
+    max-width: none;
+  }
+
+  .feed-overlay-icons {
+    grid-template-columns: 1fr;
+    justify-items: end;
   }
 
   .feed-tab-strip {
@@ -613,6 +647,14 @@ p {
 
   .feed-tab {
     flex: 1;
+    font-size: 0.86rem;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .feed-ghost-button,
+  .feed-primary-button {
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
   }
 
   .bottom-nav {
