@@ -2,9 +2,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { addComment, toggleLike } from "@/app/engagement/actions";
+import { addComment, toggleLikeInline } from "@/app/engagement/actions";
 import { toggleFollow } from "@/app/follows/actions";
 import type { LiveFeedCard } from "@/lib/feed";
 import { inferMediaKind } from "@/lib/media";
@@ -179,14 +180,21 @@ export function FeedExperience({
   guestMode = false,
   guestPromptAfter = 2,
 }: FeedExperienceProps) {
+  const router = useRouter();
   const slideRefs = useRef<(HTMLElement | null)[]>([]);
   const [observedActiveId, setObservedActiveId] = useState<string | null>(null);
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
   const [dismissedGuestGate, setDismissedGuestGate] = useState(false);
-  const activeId = observedActiveId ?? feedCards[0]?.id ?? "";
+  const [localFeedCards, setLocalFeedCards] = useState(feedCards);
+  const [pendingLikeIds, setPendingLikeIds] = useState<string[]>([]);
+  const activeId = observedActiveId ?? localFeedCards[0]?.id ?? "";
 
   useEffect(() => {
-    if (feedCards.length === 0) {
+    setLocalFeedCards(feedCards);
+  }, [feedCards]);
+
+  useEffect(() => {
+    if (localFeedCards.length === 0) {
       return;
     }
 
@@ -220,24 +228,83 @@ export function FeedExperience({
     return () => {
       observer.disconnect();
     };
-  }, [feedCards]);
+  }, [localFeedCards]);
 
   const cardsById = useMemo(
-    () => new Map(feedCards.map((card) => [card.id, card])),
-    [feedCards],
+    () => new Map(localFeedCards.map((card) => [card.id, card])),
+    [localFeedCards],
   );
-  const activeIndex = feedCards.findIndex((card) => card.id === activeId);
+  const activeIndex = localFeedCards.findIndex((card) => card.id === activeId);
   const openCommentsCard = openCommentsFor ? cardsById.get(openCommentsFor) : null;
   const showGuestGate =
     guestMode && activeIndex >= guestPromptAfter && !dismissedGuestGate;
 
-  if (feedCards.length === 0) {
+  async function handleLike(videoId: string) {
+    const currentCard = cardsById.get(videoId);
+
+    if (!currentCard) {
+      return;
+    }
+
+    const nextLikedState = !currentCard.likedByCurrentUser;
+    const nextLikesCount = Math.max(
+      0,
+      currentCard.likesCount + (nextLikedState ? 1 : -1),
+    );
+
+    setLocalFeedCards((currentCards) =>
+      currentCards.map((card) =>
+        card.id === videoId
+          ? {
+              ...card,
+              likedByCurrentUser: nextLikedState,
+              likesCount: nextLikesCount,
+              likes: new Intl.NumberFormat("en-US", {
+                notation: "compact",
+                maximumFractionDigits: 1,
+              }).format(nextLikesCount),
+            }
+          : card,
+      ),
+    );
+    setPendingLikeIds((currentIds) => [...currentIds, videoId]);
+
+    try {
+      const result = await toggleLikeInline(videoId);
+
+      if (!result.ok) {
+        setLocalFeedCards((currentCards) =>
+          currentCards.map((card) => (card.id === videoId ? currentCard : card)),
+        );
+
+        if (result.requiresAuth) {
+          router.push("/auth/login");
+        }
+
+        return;
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setLocalFeedCards((currentCards) =>
+        currentCards.map((card) => (card.id === videoId ? currentCard : card)),
+      );
+    } finally {
+      setPendingLikeIds((currentIds) =>
+        currentIds.filter((currentId) => currentId !== videoId),
+      );
+    }
+  }
+
+  if (localFeedCards.length === 0) {
     return <>{empty}</>;
   }
 
   return (
     <>
-      {feedCards.map((post, index) => (
+      {localFeedCards.map((post, index) => (
         <article
           className="feed-slide"
           data-feed-id={post.id}
@@ -286,22 +353,22 @@ export function FeedExperience({
                     <span>{post.likes}</span>
                   </Link>
                 ) : (
-                  <form action={toggleLike}>
-                    <input name="video_id" type="hidden" value={post.id} />
-                    <input name="redirect_to" type="hidden" value={redirectTarget} />
-                    <button
-                      aria-label={post.likedByCurrentUser ? "Unlike post" : "Like post"}
-                      className={
-                        post.likedByCurrentUser
-                          ? "feed-icon-button active"
-                          : "feed-icon-button"
-                      }
-                      type="submit"
-                    >
-                      <HeartIcon />
-                      <span>{post.likes}</span>
-                    </button>
-                  </form>
+                  <button
+                    aria-label={post.likedByCurrentUser ? "Unlike post" : "Like post"}
+                    className={
+                      post.likedByCurrentUser
+                        ? "feed-icon-button active"
+                        : "feed-icon-button"
+                    }
+                    disabled={pendingLikeIds.includes(post.id)}
+                    onClick={() => {
+                      void handleLike(post.id);
+                    }}
+                    type="button"
+                  >
+                    <HeartIcon />
+                    <span>{post.likes}</span>
+                  </button>
                 )}
 
                 {guestMode ? (

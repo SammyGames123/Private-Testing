@@ -9,6 +9,24 @@ type FeedPageProps = {
   }>;
 };
 
+function parseCompactCount(value: string) {
+  const normalized = value.trim().toUpperCase();
+
+  if (!normalized) {
+    return 0;
+  }
+
+  if (normalized.endsWith("M")) {
+    return Math.round(Number.parseFloat(normalized) * 1_000_000);
+  }
+
+  if (normalized.endsWith("K")) {
+    return Math.round(Number.parseFloat(normalized) * 1_000);
+  }
+
+  return Number.parseInt(normalized, 10) || 0;
+}
+
 export default async function FeedPage({ searchParams }: FeedPageProps) {
   const supabase = await createClient();
   const {
@@ -31,7 +49,9 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
       caption: post.caption,
       category: post.category,
       tags: post.tags,
+      likesCount: parseCompactCount(post.likes),
       likes: post.likes,
+      commentsCount: parseCompactCount(post.comments),
       comments: post.comments,
       views: post.views,
       age: post.age,
@@ -98,7 +118,9 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
             caption: post.caption,
             category: post.category,
             tags: post.tags,
+            likesCount: parseCompactCount(post.likes),
             likes: post.likes,
+            commentsCount: parseCompactCount(post.comments),
             comments: post.comments,
             views: post.views,
             age: post.age,

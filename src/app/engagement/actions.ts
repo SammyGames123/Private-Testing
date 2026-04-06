@@ -51,6 +51,57 @@ export async function toggleLike(formData: FormData) {
   redirect(redirectTo);
 }
 
+export async function toggleLikeInline(videoId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      requiresAuth: true,
+    };
+  }
+
+  if (!videoId) {
+    return {
+      ok: false,
+      requiresAuth: false,
+    };
+  }
+
+  const { data: existingLike } = await supabase
+    .from("likes")
+    .select("video_id")
+    .eq("user_id", user.id)
+    .eq("video_id", videoId)
+    .maybeSingle();
+
+  if (existingLike) {
+    await supabase
+      .from("likes")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("video_id", videoId);
+  } else {
+    await supabase.from("likes").insert({
+      user_id: user.id,
+      video_id: videoId,
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/feed");
+
+  return {
+    ok: true,
+    requiresAuth: false,
+    liked: !existingLike,
+  };
+}
+
 export async function addComment(formData: FormData) {
   const supabase = await createClient();
   const {

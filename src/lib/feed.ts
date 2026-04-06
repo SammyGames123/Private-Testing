@@ -31,7 +31,9 @@ export type LiveFeedCard = {
   caption: string | null;
   category: string | null;
   tags: string[];
+  likesCount: number;
   likes: string;
+  commentsCount: number;
   comments: string;
   views: string;
   age: string;
@@ -311,7 +313,9 @@ function mapVideoRowToFeedCard(args: {
     caption: row.caption,
     category: row.category,
     tags: row.video_tags?.map((tagRow) => tagRow.tag) ?? [],
+    likesCount,
     likes: formatCompactCount(likesCount),
+    commentsCount,
     comments: formatCompactCount(commentsCount),
     views: formatCompactCount(viewsCount),
     age: formatTimeAgo(row.created_at),
