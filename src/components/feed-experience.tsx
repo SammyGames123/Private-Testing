@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { addComment, toggleLikeInline } from "@/app/engagement/actions";
 import { toggleFollow } from "@/app/follows/actions";
@@ -289,10 +289,6 @@ export function FeedExperience({
 
         return;
       }
-
-      startTransition(() => {
-        router.refresh();
-      });
     } catch {
       setLocalFeedCards((currentCards) =>
         currentCards.map((card) => (card.id === videoId ? currentCard : card)),
