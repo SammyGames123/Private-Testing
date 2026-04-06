@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const appUrl =
-  process.env.CAPACITOR_LIVE_URL ?? "https://your-pulse-site.vercel.app";
+  process.env.CAPACITOR_LIVE_URL ?? "http://192.168.20.9:3000";
 
 const config: CapacitorConfig = {
   appId: "au.com.imaginefashion.pulse",
@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   webDir: ".next",
   server: {
     url: appUrl,
-    cleartext: false,
+    cleartext: true,
     androidScheme: "https",
     allowNavigation: [new URL(appUrl).hostname],
   },
