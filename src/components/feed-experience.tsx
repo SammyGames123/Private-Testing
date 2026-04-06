@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { addComment, toggleLike } from "@/app/engagement/actions";
@@ -12,6 +13,8 @@ type FeedExperienceProps = {
   feedCards: LiveFeedCard[];
   redirectTarget: string;
   empty: ReactNode;
+  guestMode?: boolean;
+  guestPromptAfter?: number;
 };
 
 function HeartIcon() {
@@ -173,10 +176,13 @@ export function FeedExperience({
   feedCards,
   redirectTarget,
   empty,
+  guestMode = false,
+  guestPromptAfter = 2,
 }: FeedExperienceProps) {
   const slideRefs = useRef<(HTMLElement | null)[]>([]);
   const [observedActiveId, setObservedActiveId] = useState<string | null>(null);
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
+  const [dismissedGuestGate, setDismissedGuestGate] = useState(false);
   const activeId = observedActiveId ?? feedCards[0]?.id ?? "";
 
   useEffect(() => {
@@ -220,7 +226,10 @@ export function FeedExperience({
     () => new Map(feedCards.map((card) => [card.id, card])),
     [feedCards],
   );
+  const activeIndex = feedCards.findIndex((card) => card.id === activeId);
   const openCommentsCard = openCommentsFor ? cardsById.get(openCommentsFor) : null;
+  const showGuestGate =
+    guestMode && activeIndex >= guestPromptAfter && !dismissedGuestGate;
 
   if (feedCards.length === 0) {
     return <>{empty}</>;
@@ -267,55 +276,94 @@ export function FeedExperience({
               </div>
 
               <div className="feed-overlay-side feed-overlay-icons">
-                <form action={toggleLike}>
-                  <input name="video_id" type="hidden" value={post.id} />
-                  <input name="redirect_to" type="hidden" value={redirectTarget} />
-                  <button
-                    aria-label={post.likedByCurrentUser ? "Unlike post" : "Like post"}
-                    className={
-                      post.likedByCurrentUser
-                        ? "feed-icon-button active"
-                        : "feed-icon-button"
-                    }
-                    type="submit"
+                {guestMode ? (
+                  <Link
+                    aria-label="Create an account to like posts"
+                    className="feed-icon-button"
+                    href="/auth/sign-up"
                   >
                     <HeartIcon />
                     <span>{post.likes}</span>
-                  </button>
-                </form>
-
-                <button
-                  aria-expanded={openCommentsFor === post.id}
-                  aria-label="Open comments"
-                  className={openCommentsFor === post.id ? "feed-icon-button active" : "feed-icon-button"}
-                  onClick={() =>
-                    setOpenCommentsFor((current) => (current === post.id ? null : post.id))
-                  }
-                  type="button"
-                >
-                  <CommentIcon />
-                  <span>{post.comments}</span>
-                </button>
-
-                {post.creatorId ? (
-                  <form action={toggleFollow}>
-                    <input name="target_user_id" type="hidden" value={post.creatorId} />
+                  </Link>
+                ) : (
+                  <form action={toggleLike}>
+                    <input name="video_id" type="hidden" value={post.id} />
                     <input name="redirect_to" type="hidden" value={redirectTarget} />
                     <button
-                      aria-label={
-                        post.followedCreatorByCurrentUser ? "Unfollow creator" : "Follow creator"
-                      }
+                      aria-label={post.likedByCurrentUser ? "Unlike post" : "Like post"}
                       className={
-                        post.followedCreatorByCurrentUser
+                        post.likedByCurrentUser
                           ? "feed-icon-button active"
                           : "feed-icon-button"
                       }
                       type="submit"
                     >
-                      <FollowIcon />
-                      <span>{post.followedCreatorByCurrentUser ? "On" : "Add"}</span>
+                      <HeartIcon />
+                      <span>{post.likes}</span>
                     </button>
                   </form>
+                )}
+
+                {guestMode ? (
+                  <Link
+                    aria-label="Create an account to comment"
+                    className="feed-icon-button"
+                    href="/auth/sign-up"
+                  >
+                    <CommentIcon />
+                    <span>{post.comments}</span>
+                  </Link>
+                ) : (
+                  <button
+                    aria-expanded={openCommentsFor === post.id}
+                    aria-label="Open comments"
+                    className={
+                      openCommentsFor === post.id
+                        ? "feed-icon-button active"
+                        : "feed-icon-button"
+                    }
+                    onClick={() =>
+                      setOpenCommentsFor((current) => (current === post.id ? null : post.id))
+                    }
+                    type="button"
+                  >
+                    <CommentIcon />
+                    <span>{post.comments}</span>
+                  </button>
+                )}
+
+                {post.creatorId ? (
+                  guestMode ? (
+                    <Link
+                      aria-label="Create an account to follow creators"
+                      className="feed-icon-button"
+                      href="/auth/sign-up"
+                    >
+                      <FollowIcon />
+                      <span>Add</span>
+                    </Link>
+                  ) : (
+                    <form action={toggleFollow}>
+                      <input name="target_user_id" type="hidden" value={post.creatorId} />
+                      <input name="redirect_to" type="hidden" value={redirectTarget} />
+                      <button
+                        aria-label={
+                          post.followedCreatorByCurrentUser
+                            ? "Unfollow creator"
+                            : "Follow creator"
+                        }
+                        className={
+                          post.followedCreatorByCurrentUser
+                            ? "feed-icon-button active"
+                            : "feed-icon-button"
+                        }
+                        type="submit"
+                      >
+                        <FollowIcon />
+                        <span>{post.followedCreatorByCurrentUser ? "On" : "Add"}</span>
+                      </button>
+                    </form>
+                  )
                 ) : null}
 
                 <div className="feed-match-pill">
@@ -375,6 +423,51 @@ export function FeedExperience({
                 Post
               </button>
             </form>
+          </section>
+        </div>
+      ) : null}
+
+      {showGuestGate ? (
+        <div
+          className="feed-comments-backdrop"
+          onClick={() => setDismissedGuestGate(true)}
+        >
+          <section
+            aria-label="Create account"
+            className="feed-comments-sheet"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="feed-comments-header">
+              <div>
+                <p className="eyebrow">Keep watching</p>
+                <h3 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
+                  Create an account to unlock the full feed.
+                </h3>
+              </div>
+              <button
+                aria-label="Close sign up prompt"
+                className="feed-comments-close"
+                onClick={() => setDismissedGuestGate(true)}
+                type="button"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+              You have previewed a couple of posts already. Sign up to keep
+              scrolling, follow creators, like videos, comment, and build your
+              personal feed.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link className="feed-primary-button" href="/auth/sign-up">
+                Create account
+              </Link>
+              <Link className="feed-ghost-auth-button" href="/auth/login">
+                Sign in
+              </Link>
+            </div>
           </section>
         </div>
       ) : null}

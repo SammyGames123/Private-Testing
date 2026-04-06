@@ -237,6 +237,18 @@ p {
   color: white;
 }
 
+.feed-ghost-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 27, 25, 0.1);
+  background: white;
+  color: var(--ink);
+  padding: 0.85rem 1rem;
+  font: inherit;
+}
+
 .feed-tab-strip {
   display: inline-flex;
   align-items: center;
