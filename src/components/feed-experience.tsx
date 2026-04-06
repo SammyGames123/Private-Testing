@@ -190,8 +190,12 @@ export function FeedExperience({
   const activeId = observedActiveId ?? localFeedCards[0]?.id ?? "";
 
   useEffect(() => {
+    if (pendingLikeIds.length > 0) {
+      return;
+    }
+
     setLocalFeedCards(feedCards);
-  }, [feedCards]);
+  }, [feedCards, pendingLikeIds]);
 
   useEffect(() => {
     if (localFeedCards.length === 0) {
@@ -267,7 +271,9 @@ export function FeedExperience({
           : card,
       ),
     );
-    setPendingLikeIds((currentIds) => [...currentIds, videoId]);
+    setPendingLikeIds((currentIds) =>
+      currentIds.includes(videoId) ? currentIds : [...currentIds, videoId],
+    );
 
     try {
       const result = await toggleLikeInline(videoId);
