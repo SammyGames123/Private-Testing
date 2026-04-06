@@ -182,6 +182,7 @@ export function FeedExperience({
 }: FeedExperienceProps) {
   const router = useRouter();
   const slideRefs = useRef<(HTMLElement | null)[]>([]);
+  const queuedFeedCardsRef = useRef<LiveFeedCard[] | null>(null);
   const [observedActiveId, setObservedActiveId] = useState<string | null>(null);
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
   const [dismissedGuestGate, setDismissedGuestGate] = useState(false);
@@ -191,11 +192,22 @@ export function FeedExperience({
 
   useEffect(() => {
     if (pendingLikeIds.length > 0) {
+      queuedFeedCardsRef.current = feedCards;
       return;
     }
 
     setLocalFeedCards(feedCards);
-  }, [feedCards, pendingLikeIds]);
+    queuedFeedCardsRef.current = null;
+  }, [feedCards, pendingLikeIds.length]);
+
+  useEffect(() => {
+    if (pendingLikeIds.length > 0 || !queuedFeedCardsRef.current) {
+      return;
+    }
+
+    setLocalFeedCards(queuedFeedCardsRef.current);
+    queuedFeedCardsRef.current = null;
+  }, [pendingLikeIds.length]);
 
   useEffect(() => {
     if (localFeedCards.length === 0) {
