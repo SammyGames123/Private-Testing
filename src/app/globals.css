@@ -387,6 +387,61 @@ p {
   text-transform: uppercase;
 }
 
+.install-pill {
+  position: fixed;
+  left: 50%;
+  top: 1rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(calc(100% - 1rem), 620px);
+  transform: translateX(-50%);
+  border: 1px solid rgba(31, 27, 25, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 249, 242, 0.96);
+  padding: 0.9rem 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.install-pill-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.install-pill-copy {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.install-pill-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.install-pill-button,
+.install-pill-dismiss {
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.install-pill-button {
+  background: var(--accent);
+  color: white;
+}
+
+.install-pill-dismiss {
+  border: 1px solid rgba(31, 27, 25, 0.08);
+  background: white;
+  color: var(--ink);
+}
+
 .feed-overlay-icons {
   align-items: end;
 }
@@ -567,5 +622,21 @@ p {
   .bottom-nav-label {
     font-size: 0.64rem;
     letter-spacing: 0.04em;
+  }
+
+  .install-pill {
+    top: auto;
+    bottom: 6.6rem;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .install-pill-actions {
+    width: 100%;
+  }
+
+  .install-pill-button,
+  .install-pill-dismiss {
+    flex: 1;
   }
 }
