@@ -1,0 +1,73 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+export async function createVideoFromCamera(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/auth/login");
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const caption = String(formData.get("caption") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
+  const playbackUrl = String(formData.get("playback_url") ?? "").trim();
+  const storagePath = String(formData.get("storage_path") ?? "").trim();
+  const visibility = String(formData.get("visibility") ?? "public").trim();
+  const durationSeconds = Number(formData.get("duration_seconds") ?? 0);
+  const tags = String(formData.get("tags") ?? "")
+    .split(",")
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (!title || !playbackUrl) {
+    redirect("/videos/new/camera");
+  }
+
+  const { data: video, error: insertError } = await supabase
+    .from("videos")
+    .insert({
+      creator_id: user.id,
+      title,
+      caption: caption || null,
+      category: category || null,
+      playback_url: playbackUrl,
+      thumbnail_url: null,
+      storage_path: storagePath || null,
+      visibility:
+        visibility === "private" || visibility === "unlisted"
+          ? visibility
+          : "public",
+      duration_seconds:
+        Number.isFinite(durationSeconds) && durationSeconds > 0
+          ? durationSeconds
+          : null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (insertError || !video) {
+    redirect("/videos/new/camera");
+  }
+
+  if (tags.length > 0) {
+    await supabase.from("video_tags").insert(
+      tags.map((tag) => ({
+        video_id: video.id,
+        tag,
+      })),
+    );
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/feed");
+  redirect("/feed");
+}
