@@ -1,37 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type CameraRecorderProps = {
   userId: string;
 };
-
-type RecordingLimit = 15 | 60 | 600;
-type AspectRatio = "9:16" | "1:1" | "16:9";
-type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
-
-const FILTERS: { name: FilterName; label: string; css: string }[] = [
-  { name: "none", label: "Normal", css: "none" },
-  { name: "bw", label: "B&W", css: "grayscale(1)" },
-  { name: "warm", label: "Warm", css: "sepia(0.35) saturate(1.3) brightness(1.05)" },
-  { name: "cool", label: "Cool", css: "saturate(0.9) brightness(1.05) hue-rotate(15deg)" },
-  { name: "vintage", label: "Vintage", css: "sepia(0.25) contrast(1.1) brightness(0.95) saturate(0.85)" },
-  { name: "vivid", label: "Vivid", css: "saturate(1.6) contrast(1.1) brightness(1.05)" },
-];
-
-const RATIO_CONSTRAINTS: Record<AspectRatio, { width: number; height: number }> = {
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "16:9": { width: 1920, height: 1080 },
-};
-
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 function slugifyFileName(fileName: string) {
   const parts = fileName.split(".");
@@ -40,7 +15,6 @@ function slugifyFileName(fileName: string) {
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}.${extension}`;
 }
 
-// SVG Icons
 function CloseIcon() {
   return (
     <svg fill="none" height="28" viewBox="0 0 24 24" width="28">
@@ -49,510 +23,343 @@ function CloseIcon() {
   );
 }
 
-function FlashIcon({ on }: { on: boolean }) {
-  return on ? (
-    <svg fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
-      <path d="M7 2v11h3v9l7-12h-4l4-8z" />
-    </svg>
-  ) : (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <path d="M7 2v11h3v9l7-12h-4l4-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M3 21 21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function FlipIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function TimerIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <circle cx="12" cy="13" r="8" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 9v4l2.5 2.5M10 2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function RatioIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="2" />
-      <path d="M3 9h18M9 3v18" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function FilterIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <circle cx="8" cy="10" r="5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="16" cy="10" r="5" stroke="currentColor" strokeWidth="2" />
-      <circle cx="12" cy="16" r="5" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
 export function CameraRecorder({ userId }: CameraRecorderProps) {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const [ready, setReady] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [flash, setFlash] = useState(false);
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
-  const [ratio, setRatio] = useState<AspectRatio>("9:16");
-  const [filter, setFilter] = useState<FilterName>("none");
-  const [limit, setLimit] = useState<RecordingLimit>(60);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showTimers, setShowTimers] = useState(false);
-  const [showRatios, setShowRatios] = useState(false);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [mode, setMode] = useState<"choose" | "recording" | "uploading">("choose");
+  const [error, setError] = useState("");
   const [uploadProgress, setUploadProgress] = useState("");
-  const [cameraError, setCameraError] = useState("");
 
-  const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
-
-  // Start camera
-  const startCamera = useCallback(async () => {
-    if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) track.stop();
-    }
-
-    const constraints = RATIO_CONSTRAINTS[ratio];
+  const handlePickVideo = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode,
-          width: { ideal: constraints.width },
-          height: { ideal: constraints.height },
-        },
-        audio: true,
-      });
-      streamRef.current = stream;
+      const { FilePicker } = await import("@capawesome/capacitor-file-picker");
+      const result = await FilePicker.pickVideos({ limit: 1, readData: true });
+      const picked = result.files[0];
+      if (!picked?.data) return;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      setMode("uploading");
+      setUploadProgress("Uploading video...");
 
-      // Flash (torch) support
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack && flash) {
-        try {
-          await videoTrack.applyConstraints({
-            // @ts-expect-error - torch is not in the standard type
-            advanced: [{ torch: true }],
-          });
-        } catch {
-          // torch not supported
-        }
-      }
+      const binary = atob(picked.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      setReady(true);
-      setCameraError("");
+      const mimeType = picked.mimeType || "video/mp4";
+      const fileName = picked.name || `video-${Date.now()}.mp4`;
+      const file = new File([bytes], fileName, { type: mimeType });
+
+      await uploadAndNavigate(file);
     } catch (err) {
-      setReady(false);
-      setCameraError(
-        err instanceof Error ? err.message : "Camera access denied. Check permissions in Settings."
-      );
+      setError(err instanceof Error ? err.message : "Failed to pick video");
+      setMode("choose");
     }
-  }, [facingMode, ratio, flash]);
-
-  useEffect(() => {
-    void startCamera();
-    return () => {
-      if (streamRef.current) {
-        for (const track of streamRef.current.getTracks()) track.stop();
-      }
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [startCamera]);
-
-  // Toggle flash
-  const toggleFlash = useCallback(async () => {
-    const next = !flash;
-    setFlash(next);
-    const track = streamRef.current?.getVideoTracks()[0];
-    if (track) {
-      try {
-        await track.applyConstraints({
-          // @ts-expect-error - torch is not in the standard type
-          advanced: [{ torch: next }],
-        });
-      } catch {
-        // not supported
-      }
-    }
-  }, [flash]);
-
-  // Flip camera
-  const flipCamera = useCallback(() => {
-    setFacingMode((m) => (m === "user" ? "environment" : "user"));
   }, []);
 
-  // Start recording
-  const startRecording = useCallback(() => {
-    if (!streamRef.current) return;
-
-    chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4")
-      ? "video/mp4"
-      : MediaRecorder.isTypeSupported("video/webm;codecs=h264")
-        ? "video/webm;codecs=h264"
-        : "video/webm";
-
-    const recorder = new MediaRecorder(streamRef.current, {
-      mimeType,
-      videoBitsPerSecond: 8_000_000,
-    });
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      setRecordedBlob(blob);
-      setReviewUrl(url);
-    };
-
-    recorder.start(500);
-    mediaRecorderRef.current = recorder;
-    setRecording(true);
-    setElapsed(0);
-
-    timerRef.current = setInterval(() => {
-      setElapsed((prev) => {
-        const next = prev + 1;
-        if (next >= limit) {
-          stopRecording();
-        }
-        return next;
-      });
-    }, 1000);
-  }, [limit]);
-
-  // Stop recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setRecording(false);
-  }, []);
-
-  // Retake
-  const handleRetake = useCallback(() => {
-    if (reviewUrl) URL.revokeObjectURL(reviewUrl);
-    setRecordedBlob(null);
-    setReviewUrl(null);
-    setElapsed(0);
-    void startCamera();
-  }, [reviewUrl, startCamera]);
-
-  // Upload and go to post form
-  const handleNext = useCallback(async () => {
-    if (!recordedBlob) return;
-    setUploading(true);
-    setUploadProgress("Uploading video...");
-
+  const handlePickPhoto = useCallback(async () => {
     try {
-      const supabase = createClient();
-      const ext = recordedBlob.type.includes("mp4") ? "mp4" : "webm";
-      const fileName = `recording-${Date.now()}.${ext}`;
-      const safeName = slugifyFileName(fileName);
-      const path = `${userId}/${Date.now()}-${safeName}`;
+      const { FilePicker } = await import("@capawesome/capacitor-file-picker");
+      const result = await FilePicker.pickImages({ limit: 1, readData: true });
+      const picked = result.files[0];
+      if (!picked?.data) return;
 
-      const { error } = await supabase.storage
-        .from("videos")
-        .upload(path, recordedBlob, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: recordedBlob.type,
-        });
+      setMode("uploading");
+      setUploadProgress("Uploading photo...");
 
-      if (error) {
-        setUploadProgress(`Upload failed: ${error.message}`);
-        setUploading(false);
+      const binary = atob(picked.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const mimeType = picked.mimeType || "image/jpeg";
+      const fileName = picked.name || `photo-${Date.now()}.jpg`;
+      const file = new File([bytes], fileName, { type: mimeType });
+
+      await uploadAndNavigate(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to pick photo");
+      setMode("choose");
+    }
+  }, []);
+
+  const handleRecordVideo = useCallback(async () => {
+    try {
+      const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
+      const result = await Camera.pickImages({
+        limit: 1,
+        quality: 100,
+      });
+
+      const photo = result.photos[0];
+      if (!photo?.webPath) {
+        // Fallback: try using the native video picker
+        setError("Use 'Choose Video' to select a recorded video from your library.");
         return;
       }
 
-      const { data } = supabase.storage.from("videos").getPublicUrl(path);
+      setMode("uploading");
+      setUploadProgress("Uploading...");
 
-      // Navigate to post form with the video details pre-filled
-      const params = new URLSearchParams({
-        storage_path: path,
-        playback_url: data.publicUrl,
-        duration: String(elapsed),
-      });
-      router.push(`/videos/new/post?${params.toString()}`);
+      const response = await fetch(photo.webPath);
+      const blob = await response.blob();
+      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+
+      await uploadAndNavigate(file);
     } catch (err) {
-      setUploadProgress("Upload failed. Try again.");
-      setUploading(false);
+      setError(err instanceof Error ? err.message : "Camera cancelled");
+      setMode("choose");
     }
-  }, [recordedBlob, userId, elapsed, router]);
+  }, []);
 
-  // Close popups on tap elsewhere
-  const closePopups = () => {
-    setShowFilters(false);
-    setShowTimers(false);
-    setShowRatios(false);
+  const handleWebRecord = useCallback(async () => {
+    // For web browsers that support getUserMedia
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1080 }, height: { ideal: 1920 } },
+        audio: true,
+      });
+
+      // Open a simple recording interface
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm",
+        videoBitsPerSecond: 8_000_000,
+      });
+
+      const chunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      setMode("recording");
+
+      return new Promise<void>((resolve) => {
+        mediaRecorder.onstop = async () => {
+          for (const track of stream.getTracks()) track.stop();
+          const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
+          const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+          const file = new File([blob], `recording-${Date.now()}.${ext}`, { type: blob.type });
+
+          setMode("uploading");
+          setUploadProgress("Uploading recording...");
+          await uploadAndNavigate(file);
+          resolve();
+        };
+
+        mediaRecorder.start(500);
+
+        // Auto-stop after 60s
+        setTimeout(() => {
+          if (mediaRecorder.state === "recording") mediaRecorder.stop();
+        }, 60000);
+      });
+    } catch {
+      setError("Camera not available in this browser. Use 'Choose Video' instead.");
+      setMode("choose");
+    }
+  }, []);
+
+  const uploadAndNavigate = async (file: File) => {
+    const supabase = createClient();
+    const safeName = slugifyFileName(file.name);
+    const path = `${userId}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("videos")
+      .upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      setError(`Upload failed: ${uploadError.message}`);
+      setMode("choose");
+      return;
+    }
+
+    const { data } = supabase.storage.from("videos").getPublicUrl(path);
+
+    const params = new URLSearchParams({
+      storage_path: path,
+      playback_url: data.publicUrl,
+      duration: "0",
+    });
+    router.push(`/videos/new/post?${params.toString()}`);
   };
 
-  // Review screen after recording
-  if (reviewUrl) {
-    return (
-      <div className="camera-shell">
-        <video
-          autoPlay
-          className="camera-preview"
-          loop
-          playsInline
-          src={reviewUrl}
-          style={{ filter: activeFilter.css }}
-        />
+  const isNative = typeof window !== "undefined" && "Capacitor" in window;
 
-        <div className="camera-review-bar">
-          <button className="camera-review-btn" onClick={handleRetake} type="button">
-            Retake
-          </button>
-          <button
-            className="camera-review-btn camera-review-next"
-            disabled={uploading}
-            onClick={() => void handleNext()}
-            type="button"
-          >
-            {uploading ? uploadProgress : "Next"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Camera viewfinder
   return (
-    <div className="camera-shell" onClick={closePopups}>
-      {/* Live preview */}
-      <video
-        autoPlay
-        className="camera-preview"
-        muted
-        playsInline
-        ref={videoRef}
-        style={{ filter: activeFilter.css }}
-      />
-      <canvas ref={canvasRef} style={{ display: "none" }} />
-
-      {/* Camera error */}
-      {cameraError ? (
-        <div style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 30,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "2rem",
-          textAlign: "center",
-          background: "rgba(0,0,0,0.85)",
-        }}>
-          <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "white" }}>Camera unavailable</p>
-          <p style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
-            {cameraError}
-          </p>
-          <button
-            onClick={() => void startCamera()}
-            style={{
-              marginTop: "1.5rem",
-              padding: "0.85rem 1.5rem",
-              borderRadius: 14,
-              background: "var(--accent)",
-              color: "white",
-              border: "none",
-              fontWeight: 700,
-              fontSize: "0.95rem",
-            }}
-            type="button"
-          >
-            Try again
-          </button>
-        </div>
-      ) : null}
-
-      {/* Top bar */}
+    <div className="camera-shell">
+      {/* Close button */}
       <div className="camera-top-bar">
-        <button
-          className="camera-icon-btn"
-          onClick={() => router.back()}
-          type="button"
-        >
+        <button className="camera-icon-btn" onClick={() => router.back()} type="button">
           <CloseIcon />
         </button>
-
-        <div className="camera-top-center">
-          {recording ? (
-            <div className="camera-recording-badge">
-              <span className="camera-rec-dot" />
-              <span>{formatTime(elapsed)}</span>
-              <span className="camera-rec-limit">/ {formatTime(limit)}</span>
-            </div>
-          ) : null}
-        </div>
-
+        <div />
         <div style={{ width: 28 }} />
       </div>
 
-      {/* Right side controls */}
-      {!recording ? (
-        <div className="camera-side-controls">
-          <button className="camera-side-btn" onClick={() => void toggleFlash()} type="button">
-            <FlashIcon on={flash} />
-            <span>Flash</span>
-          </button>
-
-          <button className="camera-side-btn" onClick={flipCamera} type="button">
-            <FlipIcon />
-            <span>Flip</span>
-          </button>
-
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTimers((v) => !v);
-              setShowFilters(false);
-              setShowRatios(false);
-            }}
-            type="button"
-          >
-            <TimerIcon />
-            <span>{limit}s</span>
-          </button>
-
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowRatios((v) => !v);
-              setShowFilters(false);
-              setShowTimers(false);
-            }}
-            type="button"
-          >
-            <RatioIcon />
-            <span>{ratio}</span>
-          </button>
-
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowFilters((v) => !v);
-              setShowTimers(false);
-              setShowRatios(false);
-            }}
-            type="button"
-          >
-            <FilterIcon />
-            <span>Filter</span>
-          </button>
-        </div>
-      ) : null}
-
-      {/* Timer picker popup */}
-      {showTimers ? (
-        <div className="camera-popup camera-popup-right" onClick={(e) => e.stopPropagation()}>
-          {([15, 60, 600] as RecordingLimit[]).map((t) => (
-            <button
-              className={`camera-popup-item ${limit === t ? "active" : ""}`}
-              key={t}
-              onClick={() => {
-                setLimit(t);
-                setShowTimers(false);
-              }}
-              type="button"
-            >
-              {t < 60 ? `${t}s` : t === 60 ? "60s" : "10m"}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Ratio picker popup */}
-      {showRatios ? (
-        <div className="camera-popup camera-popup-right" onClick={(e) => e.stopPropagation()}>
-          {(["9:16", "1:1", "16:9"] as AspectRatio[]).map((r) => (
-            <button
-              className={`camera-popup-item ${ratio === r ? "active" : ""}`}
-              key={r}
-              onClick={() => {
-                setRatio(r);
-                setShowRatios(false);
-              }}
-              type="button"
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Filter strip */}
-      {showFilters ? (
-        <div className="camera-filter-strip" onClick={(e) => e.stopPropagation()}>
-          {FILTERS.map((f) => (
-            <button
-              className={`camera-filter-chip ${filter === f.name ? "active" : ""}`}
-              key={f.name}
-              onClick={() => setFilter(f.name)}
-              type="button"
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Bottom: record button */}
-      <div className="camera-bottom-bar">
-        {recording ? (
-          <button
-            className="camera-record-btn camera-record-btn-stop"
-            onClick={stopRecording}
-            type="button"
-          >
-            <span className="camera-stop-square" />
-          </button>
+      {/* Main content area */}
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem",
+        gap: "1rem",
+      }}>
+        {mode === "uploading" ? (
+          <>
+            <div style={{
+              width: 48,
+              height: 48,
+              border: "3px solid rgba(255,255,255,0.2)",
+              borderTopColor: "var(--accent)",
+              borderRadius: "999px",
+              animation: "camera-pulse 0.8s linear infinite",
+            }} />
+            <p style={{ color: "white", fontWeight: 700, fontSize: "1.1rem" }}>
+              {uploadProgress}
+            </p>
+          </>
+        ) : mode === "recording" ? (
+          <>
+            <div className="camera-recording-badge" style={{ marginBottom: "1rem" }}>
+              <span className="camera-rec-dot" />
+              <span>Recording...</span>
+            </div>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem" }}>
+              Recording will auto-stop after 60s
+            </p>
+          </>
         ) : (
-          <button
-            className="camera-record-btn"
-            disabled={!ready}
-            onClick={startRecording}
-            type="button"
-          >
-            <span className="camera-record-inner" />
-          </button>
+          <>
+            <h2 style={{
+              color: "white",
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              textAlign: "center",
+              marginBottom: "0.5rem",
+            }}>
+              Create a post
+            </h2>
+            <p style={{
+              color: "rgba(255,255,255,0.5)",
+              fontSize: "0.9rem",
+              textAlign: "center",
+              marginBottom: "1.5rem",
+              lineHeight: 1.5,
+            }}>
+              Record or choose media from your library
+            </p>
+
+            {/* Action buttons */}
+            <div style={{ width: "100%", maxWidth: 320, display: "grid", gap: "0.75rem" }}>
+              {isNative ? (
+                <>
+                  <button
+                    className="camera-action-btn"
+                    onClick={() => void handlePickVideo()}
+                    type="button"
+                  >
+                    <CameraVideoIcon />
+                    <span>Choose Video</span>
+                  </button>
+                  <button
+                    className="camera-action-btn"
+                    onClick={() => void handlePickPhoto()}
+                    type="button"
+                  >
+                    <PhotoIcon />
+                    <span>Choose Photo</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="camera-action-btn"
+                    onClick={() => void handleWebRecord()}
+                    type="button"
+                  >
+                    <RecordIcon />
+                    <span>Record Video</span>
+                  </button>
+                  <label className="camera-action-btn" style={{ cursor: "pointer" }}>
+                    <UploadFileIcon />
+                    <span>Upload File</span>
+                    <input
+                      accept="video/*,image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setMode("uploading");
+                        setUploadProgress("Uploading...");
+                        await uploadAndNavigate(file);
+                      }}
+                      style={{ display: "none" }}
+                      type="file"
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+
+            {error ? (
+              <p style={{
+                marginTop: "1rem",
+                padding: "0.75rem 1rem",
+                borderRadius: 12,
+                background: "rgba(239,68,68,0.15)",
+                color: "#fca5a5",
+                fontSize: "0.85rem",
+                textAlign: "center",
+                maxWidth: 320,
+                width: "100%",
+              }}>
+                {error}
+              </p>
+            ) : null}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+// Icons
+function CameraVideoIcon() {
+  return (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <rect x="2" y="5" width="15" height="14" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M17 9.5l5-3v11l-5-3v-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PhotoIcon() {
+  return (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" strokeWidth="2" />
+      <path d="m3 16 5-5 4 4 3-3 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function RecordIcon() {
+  return (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="4" fill="#ef4444" />
+    </svg>
+  );
+}
+
+function UploadFileIcon() {
+  return (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <path d="M12 16V4m0 0-4 4m4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }

@@ -995,3 +995,25 @@ p {
 .camera-review-next:disabled {
   opacity: 0.6;
 }
+
+/* Camera action buttons */
+.camera-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.camera-action-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
