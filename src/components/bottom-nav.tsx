@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 type NavItem = {
   label: string;
   href: string;
+  mobileHref?: string;
   isActive: (pathname: string, searchParams: URLSearchParams) => boolean;
   icon: ReactNode;
 };
@@ -123,7 +125,9 @@ const navItems: NavItem[] = [
   {
     label: "Upload",
     href: "/videos/new",
-    isActive: (pathname) => pathname === "/videos/new",
+    mobileHref: "/videos/new/camera",
+    isActive: (pathname) =>
+      pathname === "/videos/new" || pathname.startsWith("/videos/new/"),
     icon: <UploadIcon />,
   },
   {
@@ -143,8 +147,16 @@ const navItems: NavItem[] = [
 export function BottomNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isMobile, setIsMobile] = useState(false);
 
-  if (pathname.startsWith("/auth")) {
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  if (pathname.startsWith("/auth") || pathname.startsWith("/videos/new/camera")) {
     return null;
   }
 
@@ -152,11 +164,12 @@ export function BottomNav() {
     <nav aria-label="Primary" className="bottom-nav">
       {navItems.map((item) => {
         const active = item.isActive(pathname, searchParams);
+        const href = isMobile && item.mobileHref ? item.mobileHref : item.href;
 
         return (
           <Link
             className={active ? "bottom-nav-item active" : "bottom-nav-item"}
-            href={item.href}
+            href={href}
             key={item.label}
           >
             <span className="bottom-nav-icon">{item.icon}</span>

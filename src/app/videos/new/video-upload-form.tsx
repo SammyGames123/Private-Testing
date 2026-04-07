@@ -20,6 +20,42 @@ function slugifyFileName(fileName: string) {
     .slice(0, 40)}.${extension}`;
 }
 
+async function pickFileNative(): Promise<File | null> {
+  try {
+    const { FilePicker } = await import("@capawesome/capacitor-file-picker");
+    const result = await FilePicker.pickFiles({
+      types: ["video/*", "image/*"],
+      limit: 1,
+      readData: true,
+    });
+
+    const picked = result.files[0];
+    if (!picked || !picked.data) return null;
+
+    const binary = atob(picked.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const mimeType = picked.mimeType || "video/mp4";
+    const fileName = picked.name || `video-${Date.now()}.mp4`;
+
+    return new File([bytes], fileName, { type: mimeType });
+  } catch {
+    return null;
+  }
+}
+
+function isNativePlatform() {
+  try {
+    const { Capacitor } = require("@capacitor/core");
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
 export function VideoUploadForm({ userId }: Props) {
   const [fileName, setFileName] = useState("");
   const [storagePath, setStoragePath] = useState("");
@@ -28,18 +64,7 @@ export function VideoUploadForm({ userId }: Props) {
   const [uploadError, setUploadError] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      setFileName("");
-      setStoragePath("");
-      setPlaybackUrl("");
-      setPreviewKind("video");
-      setUploadError("");
-      return;
-    }
-
+  const uploadFile = (file: File) => {
     setFileName(file.name);
     setPreviewKind(file.type.startsWith("image/") ? "image" : "video");
     setUploadError("");
@@ -72,19 +97,55 @@ export function VideoUploadForm({ userId }: Props) {
     });
   };
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setFileName("");
+      setStoragePath("");
+      setPlaybackUrl("");
+      setPreviewKind("video");
+      setUploadError("");
+      return;
+    }
+
+    uploadFile(file);
+  };
+
+  const handleNativePick = () => {
+    startTransition(async () => {
+      const file = await pickFileNative();
+      if (file) {
+        uploadFile(file);
+      }
+    });
+  };
+
+  const native = isNativePlatform();
+
   return (
     <>
       <div>
         <label className="mb-2 block text-sm font-semibold" htmlFor="video_file">
           Upload video or photo
         </label>
-        <input
-          accept="video/*,image/*"
-          className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-          id="video_file"
-          onChange={handleFileChange}
-          type="file"
-        />
+        {native ? (
+          <button
+            className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-[var(--muted)]"
+            onClick={handleNativePick}
+            type="button"
+          >
+            {fileName || "Tap to choose a file"}
+          </button>
+        ) : (
+          <input
+            accept="video/*,image/*"
+            className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
+            id="video_file"
+            onChange={handleFileChange}
+            type="file"
+          />
+        )}
         <p className="mt-2 text-sm text-[var(--muted)]">
           Upload directly from your device. Videos and images both become feed
           posts.
