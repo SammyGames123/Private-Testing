@@ -62,6 +62,7 @@ export default function PostFormPage() {
           <input name="playback_url" type="hidden" value={playbackUrl} />
           <input name="storage_path" type="hidden" value={storagePath} />
           <input name="duration_seconds" type="hidden" value={duration} />
+          <input name="visibility" type="hidden" value="public" />
 
           <div className="auth-field">
             <label htmlFor="title">Title</label>
@@ -94,53 +95,24 @@ export default function PostFormPage() {
             />
           </div>
 
-          <div className="auth-field">
-            <label htmlFor="category">Category</label>
-            <input
-              id="category"
-              name="category"
-              placeholder="e.g. comedy, travel, music"
-            />
-          </div>
-
-          <div className="auth-field">
-            <label htmlFor="tags">Tags</label>
-            <input
-              id="tags"
-              name="tags"
-              placeholder="funny, viral, trending"
-            />
-          </div>
-
-          <div className="auth-field">
-            <label htmlFor="visibility">Visibility</label>
-            <select
-              defaultValue="public"
-              id="visibility"
-              name="visibility"
-              style={{
-                width: "100%",
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.1)",
-                background: "rgba(255,255,255,0.06)",
-                color: "white",
-                padding: "0.9rem 1rem",
-                font: "inherit",
-                fontSize: "1rem",
-              }}
-            >
-              <option value="public">Public</option>
-              <option value="unlisted">Unlisted</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-
           <button
             className="auth-submit"
             disabled={submitting}
             type="submit"
           >
             {submitting ? "Publishing..." : "Publish"}
+          </button>
+
+          <button
+            className="auth-submit"
+            onClick={() => router.push("/videos/new/camera")}
+            type="button"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            Retake Video
           </button>
 
           {error ? (
