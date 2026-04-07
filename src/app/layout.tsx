@@ -29,7 +29,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f56b33",
+  themeColor: "#000000",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -44,7 +45,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className="h-full antialiased">
-      <body className={user ? "min-h-full flex flex-col has-bottom-nav" : "min-h-full flex flex-col"}>
+      <body className="min-h-full bg-black">
         {children}
         <PwaBoot />
         {user ? <BottomNav /> : null}

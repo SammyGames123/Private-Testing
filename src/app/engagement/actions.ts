@@ -91,10 +91,6 @@ export async function toggleLikeInline(videoId: string) {
     });
   }
 
-  revalidatePath("/");
-  revalidatePath("/dashboard");
-  revalidatePath("/feed");
-
   return {
     ok: true,
     requiresAuth: false,
