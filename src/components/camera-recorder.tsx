@@ -324,7 +324,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         storage_path: result.storagePath,
         playback_url: result.publicUrl,
         duration: String(elapsed),
-        filter: filter !== "none" ? activeFilter.css : "",
       });
       router.push(`/videos/new/edit?${params.toString()}`);
     } else if (uploadStatus.startsWith("Upload failed")) {
@@ -336,7 +335,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
     }
     // else: still uploading, button shows progress
-  }, [elapsed, router, filter, activeFilter.css, uploadStatus, recordedBlob, userId]);
+  }, [elapsed, router, uploadStatus, recordedBlob, userId]);
 
   const closePopups = () => {
     setShowFilters(false);
@@ -357,7 +356,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           loop
           playsInline
           src={reviewUrl}
-          style={{ filter: activeFilter.css }}
         />
 
         {/* Top bar */}
@@ -370,37 +368,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           </div>
           <div style={{ width: 28 }} />
         </div>
-
-        {/* Right side editing controls */}
-        <div className="camera-side-controls">
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowFilters((v) => !v);
-            }}
-            type="button"
-          >
-            <FilterIcon />
-            <span>Filter</span>
-          </button>
-        </div>
-
-        {/* Filter strip */}
-        {showFilters && (
-          <div className="camera-filter-strip" onClick={(e) => e.stopPropagation()}>
-            {FILTERS.map((f) => (
-              <button
-                className={`camera-filter-chip ${filter === f.name ? "active" : ""}`}
-                key={f.name}
-                onClick={() => setFilter(f.name)}
-                type="button"
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Upload progress indicator */}
         {!uploadDone && !uploadFailed && (
@@ -430,7 +397,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             onClick={handleNext}
             type="button"
           >
-            {uploadFailed ? "Retry" : uploadDone ? "Next" : "Uploading..."}
+            {uploadFailed ? "Retry" : uploadDone ? "Edit" : "Uploading..."}
           </button>
         </div>
       </div>

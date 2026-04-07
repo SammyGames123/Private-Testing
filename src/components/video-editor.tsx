@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 
 type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
 
@@ -19,16 +19,34 @@ const TEXT_COLORS = [
   "#34c759", "#007aff", "#5856d6", "#af52de", "#ff2d55",
 ];
 
-type TextOverlay = {
+const SHAPES = [
+  { id: "circle", label: "Circle", svg: '<circle cx="50" cy="50" r="40" stroke="COLOR" stroke-width="4" fill="none"/>' },
+  { id: "square", label: "Square", svg: '<rect x="10" y="10" width="80" height="80" stroke="COLOR" stroke-width="4" fill="none"/>' },
+  { id: "triangle", label: "Triangle", svg: '<polygon points="50,10 90,90 10,90" stroke="COLOR" stroke-width="4" fill="none"/>' },
+  { id: "star", label: "Star", svg: '<polygon points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35" stroke="COLOR" stroke-width="3" fill="none"/>' },
+  { id: "heart", label: "Heart", svg: '<path d="M50,30 A20,20,0,0,1,90,30 A20,20,0,0,1,50,80 A20,20,0,0,1,10,30 A20,20,0,0,1,50,30Z" stroke="COLOR" stroke-width="3" fill="none"/>' },
+  { id: "arrow", label: "Arrow", svg: '<path d="M20,50 L80,50 M60,30 L80,50 L60,70" stroke="COLOR" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' },
+  { id: "circle-filled", label: "Circle", svg: '<circle cx="50" cy="50" r="40" fill="COLOR"/>' },
+  { id: "square-filled", label: "Square", svg: '<rect x="10" y="10" width="80" height="80" fill="COLOR"/>' },
+];
+
+type Overlay = {
   id: string;
-  text: string;
+  type: "text" | "shape";
+  // text props
+  text?: string;
+  // shape props
+  shapeId?: string;
+  shapeSvg?: string;
+  // common
   x: number;
   y: number;
   color: string;
-  fontSize: number;
+  scale: number;
+  rotation: number;
 };
 
-type EditorTab = "filters" | "text" | "music";
+type EditorTab = "filters" | "text" | "shapes";
 
 type VideoEditorProps = {
   videoUrl: string;
@@ -62,16 +80,6 @@ function TextIcon() {
   );
 }
 
-function MusicIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="2" />
-      <circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
 function FilterIcon() {
   return (
     <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
@@ -82,26 +90,56 @@ function FilterIcon() {
   );
 }
 
+function ShapesIcon() {
+  return (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="2" />
+      <rect x="13" y="13" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function VolumeIcon({ muted }: { muted: boolean }) {
+  return muted ? (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
+      <path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProps) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
-  const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  // Gesture refs
+  const gestureRef = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    startDist: number;
+    startAngle: number;
+    origScale: number;
+    origRotation: number;
+    moved: boolean;
+  } | null>(null);
 
   const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [filter, setFilter] = useState<FilterName>("none");
   const [activeTab, setActiveTab] = useState<EditorTab | null>(null);
-  const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
-  const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  // When user taps the video in text mode, we create a pending overlay at that position
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingText, setPendingText] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
-  const [textColor, setTextColor] = useState("#ffffff");
-  const [musicFile, setMusicFile] = useState<File | null>(null);
-  const [musicName, setMusicName] = useState("");
-  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
-  const musicInputRef = useRef<HTMLInputElement>(null);
+  const [currentColor, setCurrentColor] = useState("#ffffff");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
@@ -118,118 +156,135 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
     }
   }, []);
 
-  // Sync music with video
-  useEffect(() => {
-    if (!musicFile) return;
-    const url = URL.createObjectURL(musicFile);
-    const audio = new Audio(url);
-    audio.loop = true;
-    musicAudioRef.current = audio;
-    if (playing) void audio.play();
-    return () => {
-      audio.pause();
-      URL.revokeObjectURL(url);
-      musicAudioRef.current = null;
-    };
-  }, [musicFile, playing]);
+  // Toggle mute
+  const toggleMute = useCallback(() => {
+    const v = videoRef.current;
+    if (v) v.muted = !v.muted;
+    setMuted((m) => !m);
+  }, []);
 
-  // Focus input when pending text appears
-  useEffect(() => {
-    if (pendingText && textInputRef.current) {
-      textInputRef.current.focus();
-    }
-  }, [pendingText]);
-
-  // Tap video to add text (in text mode) or play/pause
+  // Tap video
   const handleVideoTap = useCallback((e: React.MouseEvent) => {
-    if (activeTab === "text" && !editingTextId) {
+    if (activeTab === "text" && !selectedId) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       setPendingText({ x, y });
       setTextInput("");
-    } else if (!editingTextId) {
-      togglePlay();
+      setTimeout(() => textInputRef.current?.focus(), 50);
+    } else if (selectedId) {
+      setSelectedId(null);
     } else {
-      setEditingTextId(null);
+      togglePlay();
     }
-  }, [activeTab, editingTextId, togglePlay]);
+  }, [activeTab, selectedId, togglePlay]);
 
-  // Confirm text input
+  // Confirm text
   const confirmText = useCallback(() => {
     if (!textInput.trim() || !pendingText) return;
-    const overlay: TextOverlay = {
+    setOverlays((prev) => [...prev, {
       id: `t-${Date.now()}`,
+      type: "text",
       text: textInput.trim(),
       x: pendingText.x,
       y: pendingText.y,
-      color: textColor,
-      fontSize: 28,
-    };
-    setTextOverlays((prev) => [...prev, overlay]);
+      color: currentColor,
+      scale: 1,
+      rotation: 0,
+    }]);
     setPendingText(null);
     setTextInput("");
-  }, [textInput, pendingText, textColor]);
+  }, [textInput, pendingText, currentColor]);
 
-  // Cancel text input
-  const cancelText = useCallback(() => {
-    setPendingText(null);
-    setTextInput("");
-  }, []);
+  // Add shape
+  const addShape = useCallback((shapeId: string) => {
+    const shape = SHAPES.find((s) => s.id === shapeId);
+    if (!shape) return;
+    setOverlays((prev) => [...prev, {
+      id: `s-${Date.now()}`,
+      type: "shape",
+      shapeId: shape.id,
+      shapeSvg: shape.svg,
+      x: 50,
+      y: 45,
+      color: currentColor,
+      scale: 1,
+      rotation: 0,
+    }]);
+  }, [currentColor]);
 
-  // Delete text overlay
+  // Delete overlay
   const deleteOverlay = useCallback((id: string) => {
-    setTextOverlays((prev) => prev.filter((t) => t.id !== id));
-    setEditingTextId(null);
+    setOverlays((prev) => prev.filter((o) => o.id !== id));
+    setSelectedId(null);
   }, []);
 
-  // Drag text overlay
-  const handleTouchStart = useCallback((id: string, e: React.TouchEvent) => {
+  // ─── Gesture handling (drag + pinch to scale + rotate) ───
+
+  const getTouchInfo = (touches: React.TouchList) => {
+    if (touches.length === 1) {
+      return { x: touches[0].clientX, y: touches[0].clientY, dist: 0, angle: 0 };
+    }
+    const dx = touches[1].clientX - touches[0].clientX;
+    const dy = touches[1].clientY - touches[0].clientY;
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+      dist: Math.sqrt(dx * dx + dy * dy),
+      angle: Math.atan2(dy, dx) * (180 / Math.PI),
+    };
+  };
+
+  const handleOverlayTouchStart = useCallback((id: string, e: React.TouchEvent) => {
     e.stopPropagation();
-    const touch = e.touches[0];
-    const overlay = textOverlays.find((t) => t.id === id);
+    const overlay = overlays.find((o) => o.id === id);
     if (!overlay) return;
-    setEditingTextId(id);
-    dragRef.current = { id, startX: touch.clientX, startY: touch.clientY, origX: overlay.x, origY: overlay.y };
-  }, [textOverlays]);
+    setSelectedId(id);
+    const info = getTouchInfo(e.touches);
+    gestureRef.current = {
+      id,
+      startX: info.x,
+      startY: info.y,
+      origX: overlay.x,
+      origY: overlay.y,
+      startDist: info.dist || 1,
+      startAngle: info.angle,
+      origScale: overlay.scale,
+      origRotation: overlay.rotation,
+      moved: false,
+    };
+  }, [overlays]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    const drag = dragRef.current;
-    if (!drag || !containerRef.current) return;
-    const touch = e.touches[0];
+    const g = gestureRef.current;
+    if (!g || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const dx = ((touch.clientX - drag.startX) / rect.width) * 100;
-    const dy = ((touch.clientY - drag.startY) / rect.height) * 100;
-    const newX = Math.max(5, Math.min(95, drag.origX + dx));
-    const newY = Math.max(5, Math.min(95, drag.origY + dy));
-    const dragId = drag.id;
-    setTextOverlays((prev) =>
-      prev.map((t) => (t.id === dragId ? { ...t, x: newX, y: newY } : t)),
+    const info = getTouchInfo(e.touches);
+    g.moved = true;
+
+    // Drag
+    const dx = ((info.x - g.startX) / rect.width) * 100;
+    const dy = ((info.y - g.startY) / rect.height) * 100;
+    const newX = Math.max(2, Math.min(98, g.origX + dx));
+    const newY = Math.max(2, Math.min(98, g.origY + dy));
+
+    // Pinch to scale
+    let newScale = g.origScale;
+    let newRotation = g.origRotation;
+    if (e.touches.length >= 2 && info.dist > 0) {
+      newScale = Math.max(0.3, Math.min(5, g.origScale * (info.dist / g.startDist)));
+      newRotation = g.origRotation + (info.angle - g.startAngle);
+    }
+
+    const gId = g.id;
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === gId ? { ...o, x: newX, y: newY, scale: newScale, rotation: newRotation } : o)),
     );
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    dragRef.current = null;
-  }, []);
-
-  // Handle music file selection
-  const handleMusicSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setMusicFile(file);
-      setMusicName(file.name.replace(/\.[^.]+$/, ""));
-    }
-  }, []);
-
-  const removeMusic = useCallback(() => {
-    if (musicAudioRef.current) {
-      musicAudioRef.current.pause();
-      musicAudioRef.current = null;
-    }
-    setMusicFile(null);
-    setMusicName("");
-    if (musicInputRef.current) musicInputRef.current.value = "";
+    gestureRef.current = null;
   }, []);
 
   // Navigate to post form
@@ -240,11 +295,11 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
       duration,
       filter: filter !== "none" ? activeFilter.css : "",
     });
-    if (textOverlays.length > 0) {
-      sessionStorage.setItem("pulse_text_overlays", JSON.stringify(textOverlays));
+    if (overlays.length > 0) {
+      sessionStorage.setItem("pulse_overlays", JSON.stringify(overlays));
     }
     router.push(`/videos/new/post?${params.toString()}`);
-  }, [storagePath, videoUrl, duration, filter, activeFilter.css, textOverlays, router]);
+  }, [storagePath, videoUrl, duration, filter, activeFilter.css, overlays, router]);
 
   const isTextMode = activeTab === "text";
 
@@ -255,50 +310,63 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
       onTouchEnd={handleTouchEnd}
       style={{ touchAction: "none" }}
     >
-      {/* Video preview with filter */}
+      {/* Video preview */}
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} onClick={handleVideoTap}>
         <video
           autoPlay
           className="camera-preview"
           loop
-          muted
+          muted={muted}
           playsInline
           ref={videoRef}
           src={videoUrl}
           style={{ filter: activeFilter.css }}
         />
 
-        {/* Text overlays */}
-        {textOverlays.map((t) => (
+        {/* Overlays */}
+        {overlays.map((o) => (
           <div
-            key={t.id}
-            onTouchStart={(e) => handleTouchStart(t.id, e)}
+            key={o.id}
+            onTouchStart={(e) => handleOverlayTouchStart(o.id, e)}
             onClick={(e) => {
               e.stopPropagation();
-              setEditingTextId(editingTextId === t.id ? null : t.id);
+              setSelectedId(selectedId === o.id ? null : o.id);
             }}
             style={{
               position: "absolute",
-              left: `${t.x}%`,
-              top: `${t.y}%`,
-              transform: "translate(-50%, -50%)",
-              color: t.color,
-              fontSize: t.fontSize,
-              fontWeight: 800,
-              textShadow: "0 2px 8px rgba(0,0,0,0.6), 0 0 2px rgba(0,0,0,0.4)",
+              left: `${o.x}%`,
+              top: `${o.y}%`,
+              transform: `translate(-50%, -50%) scale(${o.scale}) rotate(${o.rotation}deg)`,
               zIndex: 15,
               userSelect: "none",
               WebkitUserSelect: "none",
-              padding: "0.25rem 0.5rem",
-              border: editingTextId === t.id ? "1px dashed rgba(255,255,255,0.6)" : "none",
+              border: selectedId === o.id ? "1px dashed rgba(255,255,255,0.6)" : "none",
               borderRadius: 8,
-              whiteSpace: "nowrap",
+              padding: o.type === "text" ? "0.25rem 0.5rem" : "0.25rem",
             }}
           >
-            {t.text}
-            {editingTextId === t.id && (
+            {o.type === "text" && (
+              <span style={{
+                color: o.color,
+                fontSize: 28,
+                fontWeight: 800,
+                textShadow: "0 2px 8px rgba(0,0,0,0.6), 0 0 2px rgba(0,0,0,0.4)",
+                whiteSpace: "nowrap",
+              }}>
+                {o.text}
+              </span>
+            )}
+            {o.type === "shape" && o.shapeSvg && (
+              <svg
+                viewBox="0 0 100 100"
+                width="80"
+                height="80"
+                dangerouslySetInnerHTML={{ __html: o.shapeSvg.replace(/COLOR/g, o.color) }}
+              />
+            )}
+            {selectedId === o.id && (
               <button
-                onClick={(e) => { e.stopPropagation(); deleteOverlay(t.id); }}
+                onClick={(e) => { e.stopPropagation(); deleteOverlay(o.id); }}
                 style={{
                   position: "absolute",
                   top: -14,
@@ -325,7 +393,7 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
           </div>
         ))}
 
-        {/* Pending text input positioned on video */}
+        {/* Pending text preview */}
         {pendingText && (
           <div
             onClick={(e) => e.stopPropagation()}
@@ -335,15 +403,13 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
               top: `${pendingText.y}%`,
               transform: "translate(-50%, -50%)",
               zIndex: 25,
-              color: textColor,
+              color: currentColor,
               fontSize: 28,
               fontWeight: 800,
               textShadow: "0 2px 8px rgba(0,0,0,0.6)",
             }}
           >
-            {textInput || (
-              <span style={{ opacity: 0.4 }}>Type here...</span>
-            )}
+            {textInput || <span style={{ opacity: 0.4 }}>Type here...</span>}
           </div>
         )}
 
@@ -368,8 +434,8 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
           </div>
         )}
 
-        {/* Tap hint for text mode */}
-        {isTextMode && !pendingText && textOverlays.length === 0 && (
+        {/* Tap hint */}
+        {isTextMode && !pendingText && overlays.filter((o) => o.type === "text").length === 0 && (
           <div style={{
             position: "absolute",
             top: "50%",
@@ -395,53 +461,33 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
         <div className="camera-top-center">
           <span style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>Edit</span>
         </div>
-        <button
-          onClick={handleNext}
-          style={{
-            background: "var(--accent, #e040fb)",
-            color: "white",
-            border: "none",
-            borderRadius: 20,
-            padding: "0.5rem 1.25rem",
-            fontWeight: 700,
-            fontSize: "0.9rem",
-          }}
-          type="button"
-        >
-          Next
-        </button>
-      </div>
-
-      {/* Music indicator */}
-      {musicName && (
-        <div style={{
-          position: "absolute",
-          top: "calc(env(safe-area-inset-top, 0px) + 3.5rem)",
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "rgba(0,0,0,0.5)",
-          borderRadius: 20,
-          padding: "0.35rem 1rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          zIndex: 20,
-        }}>
-          <MusicIcon />
-          <span style={{ color: "white", fontSize: "0.8rem", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {musicName}
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button
-            onClick={removeMusic}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", padding: 0, fontSize: "1.2rem", lineHeight: 1 }}
+            onClick={toggleMute}
+            style={{ background: "none", border: "none", color: "white", padding: 4 }}
             type="button"
           >
-            ×
+            <VolumeIcon muted={muted} />
+          </button>
+          <button
+            onClick={handleNext}
+            style={{
+              background: "var(--accent, #e040fb)",
+              color: "white",
+              border: "none",
+              borderRadius: 20,
+              padding: "0.5rem 1.25rem",
+              fontWeight: 700,
+              fontSize: "0.9rem",
+            }}
+            type="button"
+          >
+            Next
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Text input bar (appears when tapping in text mode) */}
+      {/* Text input bar */}
       {pendingText && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -458,38 +504,28 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
             paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
           }}
         >
-          {/* Color picker row */}
           <div style={{ display: "flex", gap: "0.35rem", justifyContent: "center", marginBottom: "0.75rem" }}>
             {TEXT_COLORS.map((c) => (
               <button
                 key={c}
-                onClick={() => setTextColor(c)}
+                onClick={() => setCurrentColor(c)}
                 style={{
                   width: 26,
                   height: 26,
                   borderRadius: 13,
                   background: c,
-                  border: textColor === c ? "2px solid white" : "2px solid rgba(255,255,255,0.2)",
-                  outline: textColor === c ? "2px solid var(--accent, #e040fb)" : "none",
+                  border: currentColor === c ? "2px solid white" : "2px solid rgba(255,255,255,0.2)",
+                  outline: currentColor === c ? "2px solid var(--accent, #e040fb)" : "none",
                   padding: 0,
                 }}
                 type="button"
               />
             ))}
           </div>
-
-          {/* Input + buttons */}
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <button
-              onClick={cancelText}
-              style={{
-                background: "none",
-                border: "none",
-                color: "rgba(255,255,255,0.6)",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                padding: "0.5rem",
-              }}
+              onClick={() => { setPendingText(null); setTextInput(""); }}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 600, padding: "0.5rem" }}
               type="button"
             >
               Cancel
@@ -532,7 +568,7 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
         </div>
       )}
 
-      {/* Bottom toolbar (hidden when text input is active) */}
+      {/* Bottom toolbar */}
       {!pendingText && (
         <div style={{
           position: "absolute",
@@ -565,65 +601,63 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
           {/* Text panel */}
           {activeTab === "text" && (
             <div style={{ padding: "0.75rem 1rem 0.5rem" }}>
-              {textOverlays.length > 0 ? (
-                <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem", textAlign: "center" }}>
-                  Tap video to add more text. Drag to move. Tap text to delete.
-                </p>
-              ) : (
-                <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem", textAlign: "center" }}>
-                  Tap anywhere on the video to place text
-                </p>
-              )}
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem", textAlign: "center" }}>
+                {overlays.some((o) => o.type === "text")
+                  ? "Tap video to add more. Pinch to resize. Two fingers to rotate."
+                  : "Tap anywhere on the video to place text"}
+              </p>
             </div>
           )}
 
-          {/* Music panel */}
-          {activeTab === "music" && (
-            <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <input
-                ref={musicInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleMusicSelect}
-                style={{ display: "none" }}
-              />
-              <button
-                onClick={() => musicInputRef.current?.click()}
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: 14,
-                  color: "white",
-                  padding: "0.85rem",
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
-                }}
-                type="button"
-              >
-                <MusicIcon />
-                {musicFile ? "Change Music" : "Add Music from Library"}
-              </button>
-              {musicFile && (
-                <button
-                  onClick={removeMusic}
-                  style={{
-                    background: "rgba(255,59,48,0.2)",
-                    border: "1px solid rgba(255,59,48,0.3)",
-                    borderRadius: 14,
-                    color: "#ff3b30",
-                    padding: "0.75rem",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                  }}
-                  type="button"
-                >
-                  Remove Music
-                </button>
-              )}
+          {/* Shapes panel */}
+          {activeTab === "shapes" && (
+            <div style={{ padding: "1rem 0.5rem 0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.35rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+                {TEXT_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrentColor(c)}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      background: c,
+                      border: currentColor === c ? "2px solid white" : "2px solid rgba(255,255,255,0.2)",
+                      outline: currentColor === c ? "2px solid var(--accent, #e040fb)" : "none",
+                      padding: 0,
+                    }}
+                    type="button"
+                  />
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", padding: "0 0.5rem" }}>
+                {SHAPES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => addShape(s.id)}
+                    style={{
+                      flexShrink: 0,
+                      width: 56,
+                      height: 56,
+                      borderRadius: 12,
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 4,
+                    }}
+                    type="button"
+                  >
+                    <svg
+                      viewBox="0 0 100 100"
+                      width="36"
+                      height="36"
+                      dangerouslySetInnerHTML={{ __html: s.svg.replace(/COLOR/g, "white") }}
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -637,13 +671,13 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
             {([
               { tab: "filters" as EditorTab, icon: <FilterIcon />, label: "Filters" },
               { tab: "text" as EditorTab, icon: <TextIcon />, label: "Text" },
-              { tab: "music" as EditorTab, icon: <MusicIcon />, label: "Music" },
+              { tab: "shapes" as EditorTab, icon: <ShapesIcon />, label: "Shapes" },
             ]).map(({ tab, icon, label }) => (
               <button
                 key={tab}
                 onClick={() => {
                   setActiveTab(activeTab === tab ? null : tab);
-                  setEditingTextId(null);
+                  setSelectedId(null);
                 }}
                 style={{
                   background: "none",
