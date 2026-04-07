@@ -9,7 +9,6 @@ type CameraRecorderProps = {
 };
 
 type RecordingLimit = 15 | 60 | 600;
-type AspectRatio = "9:16" | "1:1" | "16:9";
 type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
 
 const FILTERS: { name: FilterName; label: string; css: string }[] = [
@@ -20,12 +19,6 @@ const FILTERS: { name: FilterName; label: string; css: string }[] = [
   { name: "vintage", label: "Vintage", css: "sepia(0.25) contrast(1.1) brightness(0.95) saturate(0.85)" },
   { name: "vivid", label: "Vivid", css: "saturate(1.6) contrast(1.1) brightness(1.05)" },
 ];
-
-const RATIO_CONSTRAINTS: Record<AspectRatio, { width: number; height: number }> = {
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "16:9": { width: 1920, height: 1080 },
-};
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -38,6 +31,39 @@ function slugifyFileName(fileName: string) {
   const extension = parts.length > 1 ? parts.pop()?.toLowerCase() ?? "mp4" : "mp4";
   const base = parts.join(".") || "video";
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}.${extension}`;
+}
+
+/** Upload a blob to Supabase in the background. Returns the public URL and storage path. */
+function uploadInBackground(
+  blob: Blob,
+  userId: string,
+  onProgress: (msg: string) => void,
+  onDone: (result: { publicUrl: string; storagePath: string } | null) => void,
+) {
+  const supabase = createClient();
+  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+  const safeName = slugifyFileName(`recording-${Date.now()}.${ext}`);
+  const path = `${userId}/${Date.now()}-${safeName}`;
+
+  onProgress("Uploading...");
+
+  supabase.storage
+    .from("videos")
+    .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: blob.type })
+    .then(({ error }) => {
+      if (error) {
+        onProgress(`Upload failed: ${error.message}`);
+        onDone(null);
+        return;
+      }
+      const { data } = supabase.storage.from("videos").getPublicUrl(path);
+      onProgress("Uploaded");
+      onDone({ publicUrl: data.publicUrl, storagePath: path });
+    })
+    .catch(() => {
+      onProgress("Upload failed");
+      onDone(null);
+    });
 }
 
 // ─── SVG Icons ───
@@ -80,15 +106,6 @@ function TimerIcon() {
   );
 }
 
-function RatioIcon() {
-  return (
-    <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
-      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="2" />
-      <path d="M3 9h18M9 3v18" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
 function FilterIcon() {
   return (
     <svg fill="none" height="24" viewBox="0 0 24 24" width="24">
@@ -115,39 +132,36 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadResultRef = useRef<{ publicUrl: string; storagePath: string } | null>(null);
 
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [flash, setFlash] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
-  const [ratio, setRatio] = useState<AspectRatio>("9:16");
   const [filter, setFilter] = useState<FilterName>("none");
   const [limit, setLimit] = useState<RecordingLimit>(60);
   const [showFilters, setShowFilters] = useState(false);
   const [showTimers, setShowTimers] = useState(false);
-  const [showRatios, setShowRatios] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
   const [cameraError, setCameraError] = useState("");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
-  // ─── Start camera ───
+  // ─── Start camera (always 9:16 vertical) ───
   const startCamera = useCallback(async () => {
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) track.stop();
     }
 
-    const constraints = RATIO_CONSTRAINTS[ratio];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
-          width: { ideal: constraints.width },
-          height: { ideal: constraints.height },
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
           frameRate: { ideal: 60, min: 30 },
         },
         audio: true,
@@ -159,7 +173,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         await videoRef.current.play();
       }
 
-      // Flash (torch) support
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && flash) {
         try {
@@ -180,7 +193,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         err instanceof Error ? err.message : "Camera access denied. Check permissions in Settings."
       );
     }
-  }, [facingMode, ratio, flash]);
+  }, [facingMode, flash]);
 
   useEffect(() => {
     void startCamera();
@@ -239,6 +252,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       const url = URL.createObjectURL(blob);
       setRecordedBlob(blob);
       setReviewUrl(url);
+
+      // Start uploading immediately in the background
+      uploadResultRef.current = null;
+      uploadInBackground(blob, userId, setUploadStatus, (result) => {
+        uploadResultRef.current = result;
+      });
     };
 
     recorder.start(500);
@@ -256,7 +275,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit]);
+  }, [limit, userId]);
 
   // ─── Stop recording ───
   const stopRecording = useCallback(() => {
@@ -277,7 +296,13 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     const url = URL.createObjectURL(file);
     setRecordedBlob(file);
     setReviewUrl(url);
-  }, []);
+
+    // Start uploading immediately in the background
+    uploadResultRef.current = null;
+    uploadInBackground(file, userId, setUploadStatus, (result) => {
+      uploadResultRef.current = result;
+    });
+  }, [userId]);
 
   // ─── Retake ───
   const handleRetake = useCallback(() => {
@@ -285,63 +310,47 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     setRecordedBlob(null);
     setReviewUrl(null);
     setElapsed(0);
+    setUploadStatus("");
+    uploadResultRef.current = null;
     void startCamera();
   }, [reviewUrl, startCamera]);
 
-  // ─── Upload and go to post form ───
-  const handleNext = useCallback(async () => {
-    if (!recordedBlob) return;
-    setUploading(true);
-    setUploadProgress("Uploading video...");
-
-    try {
-      const supabase = createClient();
-      const ext = recordedBlob.type.includes("mp4") ? "mp4" : "webm";
-      const fileName = `recording-${Date.now()}.${ext}`;
-      const safeName = slugifyFileName(fileName);
-      const path = `${userId}/${Date.now()}-${safeName}`;
-
-      const { error } = await supabase.storage
-        .from("videos")
-        .upload(path, recordedBlob, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: recordedBlob.type,
-        });
-
-      if (error) {
-        setUploadProgress(`Upload failed: ${error.message}`);
-        setUploading(false);
-        return;
-      }
-
-      const { data } = supabase.storage.from("videos").getPublicUrl(path);
-
+  // ─── Navigate to post form (upload already running/done in background) ───
+  const handleNext = useCallback(() => {
+    const result = uploadResultRef.current;
+    if (result) {
+      // Upload already finished — navigate immediately
       const params = new URLSearchParams({
-        storage_path: path,
-        playback_url: data.publicUrl,
+        storage_path: result.storagePath,
+        playback_url: result.publicUrl,
         duration: String(elapsed),
         filter: filter !== "none" ? activeFilter.css : "",
-        ratio,
       });
       router.push(`/videos/new/post?${params.toString()}`);
-    } catch {
-      setUploadProgress("Upload failed. Try again.");
-      setUploading(false);
+    } else if (uploadStatus.startsWith("Upload failed")) {
+      // Retry upload
+      if (recordedBlob) {
+        uploadInBackground(recordedBlob, userId, setUploadStatus, (r) => {
+          uploadResultRef.current = r;
+        });
+      }
     }
-  }, [recordedBlob, userId, elapsed, router, filter, activeFilter.css, ratio]);
+    // else: still uploading, button shows progress
+  }, [elapsed, router, filter, activeFilter.css, uploadStatus, recordedBlob, userId]);
 
-  // Close popups on tap elsewhere
   const closePopups = () => {
     setShowFilters(false);
     setShowTimers(false);
-    setShowRatios(false);
   };
+
+  // Is the background upload done?
+  const uploadDone = uploadResultRef.current !== null;
+  const uploadFailed = uploadStatus.startsWith("Upload failed");
 
   // ─── Review screen after recording ───
   if (reviewUrl) {
     return (
-      <div className="camera-shell">
+      <div className="camera-shell" onClick={closePopups}>
         <video
           autoPlay
           className="camera-preview"
@@ -369,7 +378,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             onClick={(e) => {
               e.stopPropagation();
               setShowFilters((v) => !v);
-              setShowRatios(false);
             }}
             type="button"
           >
@@ -394,24 +402,42 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           </div>
         )}
 
+        {/* Upload progress indicator */}
+        {!uploadDone && !uploadFailed && (
+          <div style={{
+            position: "absolute",
+            bottom: 100,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.6)",
+            borderRadius: 20,
+            padding: "0.4rem 1rem",
+            color: "rgba(255,255,255,0.7)",
+            fontSize: "0.75rem",
+            zIndex: 20,
+          }}>
+            {uploadStatus || "Preparing..."}
+          </div>
+        )}
+
         <div className="camera-review-bar">
           <button className="camera-review-btn" onClick={handleRetake} type="button">
             Retake
           </button>
           <button
-            className="camera-review-btn camera-review-next"
-            disabled={uploading}
-            onClick={() => void handleNext()}
+            className={`camera-review-btn camera-review-next${!uploadDone && !uploadFailed ? " camera-review-uploading" : ""}`}
+            disabled={!uploadDone && !uploadFailed}
+            onClick={handleNext}
             type="button"
           >
-            {uploading ? uploadProgress : "Next"}
+            {uploadFailed ? "Retry" : uploadDone ? "Next" : "Uploading..."}
           </button>
         </div>
       </div>
     );
   }
 
-  // ─── Camera viewfinder (TikTok-style) ───
+  // ─── Camera viewfinder (TikTok-style, full screen 9:16) ───
   return (
     <div className="camera-shell" onClick={closePopups}>
       {/* Hidden file input for upload from library */}
@@ -508,7 +534,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
               e.stopPropagation();
               setShowTimers((v) => !v);
               setShowFilters(false);
-              setShowRatios(false);
             }}
             type="button"
           >
@@ -520,23 +545,8 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             className="camera-side-btn"
             onClick={(e) => {
               e.stopPropagation();
-              setShowRatios((v) => !v);
-              setShowFilters(false);
-              setShowTimers(false);
-            }}
-            type="button"
-          >
-            <RatioIcon />
-            <span>{ratio}</span>
-          </button>
-
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
               setShowFilters((v) => !v);
               setShowTimers(false);
-              setShowRatios(false);
             }}
             type="button"
           >
@@ -557,22 +567,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
               type="button"
             >
               {t < 60 ? `${t}s` : t === 60 ? "60s" : "10m"}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Ratio picker popup */}
-      {showRatios && (
-        <div className="camera-popup camera-popup-right" onClick={(e) => e.stopPropagation()}>
-          {(["9:16", "1:1", "16:9"] as AspectRatio[]).map((r) => (
-            <button
-              className={`camera-popup-item ${ratio === r ? "active" : ""}`}
-              key={r}
-              onClick={() => { setRatio(r); setShowRatios(false); }}
-              type="button"
-            >
-              {r}
             </button>
           ))}
         </div>
