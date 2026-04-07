@@ -160,8 +160,8 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 60, min: 30 },
         },
         audio: true,
