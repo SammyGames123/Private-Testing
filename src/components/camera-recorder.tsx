@@ -122,6 +122,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [cameraError, setCameraError] = useState("");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
@@ -162,8 +163,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
 
       setReady(true);
-    } catch {
+      setCameraError("");
+    } catch (err) {
       setReady(false);
+      setCameraError(
+        err instanceof Error ? err.message : "Camera access denied. Check permissions in Settings."
+      );
     }
   }, [facingMode, ratio, flash]);
 
@@ -355,6 +360,43 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         style={{ filter: activeFilter.css }}
       />
       <canvas ref={canvasRef} style={{ display: "none" }} />
+
+      {/* Camera error */}
+      {cameraError ? (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 30,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2rem",
+          textAlign: "center",
+          background: "rgba(0,0,0,0.85)",
+        }}>
+          <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "white" }}>Camera unavailable</p>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+            {cameraError}
+          </p>
+          <button
+            onClick={() => void startCamera()}
+            style={{
+              marginTop: "1.5rem",
+              padding: "0.85rem 1.5rem",
+              borderRadius: 14,
+              background: "var(--accent)",
+              color: "white",
+              border: "none",
+              fontWeight: 700,
+              fontSize: "0.95rem",
+            }}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
 
       {/* Top bar */}
       <div className="camera-top-bar">
