@@ -21,6 +21,12 @@ const config: CapacitorConfig = {
     contentInset: "always",
     preferredContentMode: "mobile",
     scheme: "Pulse",
+    allowsLinkPreview: false,
+  },
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
   },
 };
 
