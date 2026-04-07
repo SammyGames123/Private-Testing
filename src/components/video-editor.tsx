@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
 
@@ -140,6 +141,8 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
   const [pendingText, setPendingText] = useState<{ x: number; y: number } | null>(null);
   const [textInput, setTextInput] = useState("");
   const [currentColor, setCurrentColor] = useState("#ffffff");
+  const [processing, setProcessing] = useState(false);
+  const [processProgress, setProcessProgress] = useState("");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
@@ -287,19 +290,185 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
     gestureRef.current = null;
   }, []);
 
-  // Navigate to post form
-  const handleNext = useCallback(() => {
-    const params = new URLSearchParams({
-      storage_path: storagePath,
-      playback_url: videoUrl,
-      duration,
-      filter: filter !== "none" ? activeFilter.css : "",
-    });
-    if (overlays.length > 0) {
-      sessionStorage.setItem("pulse_overlays", JSON.stringify(overlays));
+  // Process video: burn overlays + filter into actual video file
+  const handleNext = useCallback(async () => {
+    const hasOverlays = overlays.length > 0;
+    const hasFilter = filter !== "none";
+
+    // Nothing to burn in — skip processing
+    if (!hasOverlays && !hasFilter) {
+      const params = new URLSearchParams({ storage_path: storagePath, playback_url: videoUrl, duration });
+      router.push(`/videos/new/post?${params.toString()}`);
+      return;
     }
-    router.push(`/videos/new/post?${params.toString()}`);
-  }, [storagePath, videoUrl, duration, filter, activeFilter.css, overlays, router]);
+
+    setProcessing(true);
+    setProcessProgress("Preparing...");
+
+    try {
+      // Load video in a fresh element with CORS
+      const vid = document.createElement("video");
+      vid.crossOrigin = "anonymous";
+      vid.playsInline = true;
+      vid.muted = true;
+      vid.preload = "auto";
+      vid.src = videoUrl;
+
+      await new Promise<void>((resolve, reject) => {
+        vid.onloadeddata = () => resolve();
+        vid.onerror = () => reject(new Error("Failed to load video for processing"));
+        setTimeout(() => reject(new Error("Video load timed out")), 15000);
+      });
+
+      const W = vid.videoWidth || 1080;
+      const H = vid.videoHeight || 1920;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+
+      // Pre-render shape SVGs as Image objects
+      const shapeImages = new Map<string, HTMLImageElement>();
+      for (const o of overlays) {
+        if (o.type === "shape" && o.shapeSvg) {
+          const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">${o.shapeSvg.replace(/COLOR/g, o.color)}</svg>`;
+          const img = new Image();
+          img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`;
+          await new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
+          shapeImages.set(o.id, img);
+        }
+      }
+
+      // Canvas stream (video track)
+      const canvasStream = canvas.captureStream(30);
+
+      // Try to capture audio from original video
+      let combinedStream: MediaStream = canvasStream;
+      const audioVid = document.createElement("video");
+      if (!muted) {
+        try {
+          audioVid.crossOrigin = "anonymous";
+          audioVid.playsInline = true;
+          audioVid.src = videoUrl;
+          audioVid.preload = "auto";
+          await new Promise<void>((r) => { audioVid.onloadeddata = () => r(); audioVid.onerror = () => r(); });
+          const audioStream = (audioVid as unknown as { captureStream(): MediaStream }).captureStream();
+          const audioTracks = audioStream.getAudioTracks();
+          if (audioTracks.length > 0) {
+            combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+            audioVid.currentTime = 0;
+            await audioVid.play();
+          }
+        } catch {
+          // Continue without audio
+        }
+      }
+
+      // MediaRecorder
+      const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
+      const recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 12_000_000 });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      const recordingDone = new Promise<Blob>((resolve) => {
+        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+      });
+
+      recorder.start(200);
+      setProcessProgress("Processing video...");
+
+      // Play the source video (not looping)
+      vid.loop = false;
+      vid.currentTime = 0;
+      await vid.play();
+
+      // Scale factor for overlay rendering
+      const scaleFactor = W / 400;
+
+      const drawFrame = () => {
+        if (vid.ended || vid.paused) {
+          recorder.stop();
+          try { audioVid.pause(); } catch {}
+          return;
+        }
+
+        // Draw video frame (with filter if applicable)
+        if (hasFilter) ctx.filter = activeFilter.css;
+        ctx.drawImage(vid, 0, 0, W, H);
+        if (hasFilter) ctx.filter = "none";
+
+        // Draw overlays
+        for (const o of overlays) {
+          const ox = (o.x / 100) * W;
+          const oy = (o.y / 100) * H;
+
+          ctx.save();
+          ctx.translate(ox, oy);
+          ctx.scale(o.scale, o.scale);
+          ctx.rotate((o.rotation * Math.PI) / 180);
+
+          if (o.type === "text" && o.text) {
+            const fontSize = Math.round(28 * scaleFactor);
+            ctx.font = `800 ${fontSize}px -apple-system, BlinkMacSystemFont, "SF Pro", sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowColor = "rgba(0,0,0,0.6)";
+            ctx.shadowBlur = 8 * scaleFactor;
+            ctx.shadowOffsetY = 2 * scaleFactor;
+            ctx.fillStyle = o.color;
+            ctx.fillText(o.text, 0, 0);
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+          }
+
+          if (o.type === "shape") {
+            const img = shapeImages.get(o.id);
+            if (img) {
+              const size = 80 * scaleFactor;
+              ctx.drawImage(img, -size / 2, -size / 2, size, size);
+            }
+          }
+
+          ctx.restore();
+        }
+
+        requestAnimationFrame(drawFrame);
+      };
+
+      requestAnimationFrame(drawFrame);
+
+      // Wait for recording to finish
+      const blob = await recordingDone;
+
+      setProcessProgress("Uploading...");
+
+      // Upload processed video
+      const supabase = createClient();
+      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+      const editedPath = storagePath.replace(/\.[^.]+$/, `-edited-${Date.now()}.${ext}`);
+
+      const { error } = await supabase.storage
+        .from("videos")
+        .upload(editedPath, blob, { cacheControl: "3600", upsert: false, contentType: mimeType });
+
+      if (error) throw error;
+
+      const { data } = supabase.storage.from("videos").getPublicUrl(editedPath);
+
+      const params = new URLSearchParams({
+        storage_path: editedPath,
+        playback_url: data.publicUrl,
+        duration,
+      });
+      router.push(`/videos/new/post?${params.toString()}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Processing failed";
+      setProcessProgress(msg);
+      setTimeout(() => { setProcessing(false); setProcessProgress(""); }, 3000);
+    }
+  }, [overlays, filter, activeFilter.css, storagePath, videoUrl, duration, muted, router]);
 
   const isTextMode = activeTab === "text";
 
@@ -565,6 +734,32 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
               Done
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Processing overlay */}
+      {processing && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 100,
+          background: "rgba(0,0,0,0.85)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "1rem",
+        }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            border: "3px solid rgba(255,255,255,0.2)",
+            borderTopColor: "var(--accent, #e040fb)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <p style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>{processProgress}</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
