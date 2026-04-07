@@ -326,7 +326,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         duration: String(elapsed),
         filter: filter !== "none" ? activeFilter.css : "",
       });
-      router.push(`/videos/new/post?${params.toString()}`);
+      router.push(`/videos/new/edit?${params.toString()}`);
     } else if (uploadStatus.startsWith("Upload failed")) {
       // Retry upload
       if (recordedBlob) {
