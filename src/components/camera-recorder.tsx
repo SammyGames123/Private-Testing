@@ -147,6 +147,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState("");
   const [cameraError, setCameraError] = useState("");
+  const [debugInfo, setDebugInfo] = useState("Initializing...");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
@@ -156,7 +157,16 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       for (const track of streamRef.current.getTracks()) track.stop();
     }
 
+    // Debug: check if mediaDevices is available
+    setDebugInfo(`secure: ${window.isSecureContext}, mediaDevices: ${!!navigator.mediaDevices}, getUserMedia: ${!!navigator.mediaDevices?.getUserMedia}`);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("getUserMedia not available. Page may not be in a secure context (HTTPS required).");
+      return;
+    }
+
     try {
+      setDebugInfo("Calling getUserMedia...");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
@@ -166,6 +176,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         },
         audio: true,
       });
+      setDebugInfo("Got stream, attaching to video...");
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -187,11 +198,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
 
       setReady(true);
       setCameraError("");
+      setDebugInfo("Camera ready!");
     } catch (err) {
       setReady(false);
-      setCameraError(
-        err instanceof Error ? err.message : "Camera access denied. Check permissions in Settings."
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      setCameraError(msg);
+      setDebugInfo(`Error: ${msg}`);
     }
   }, [facingMode, flash]);
 
@@ -425,6 +437,25 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         ref={videoRef}
         style={{ filter: activeFilter.css }}
       />
+
+      {/* Debug info (temporary) */}
+      <div style={{
+        position: "absolute",
+        top: 60,
+        left: 10,
+        right: 10,
+        zIndex: 50,
+        background: "rgba(0,0,0,0.8)",
+        color: "#0f0",
+        fontSize: "0.7rem",
+        fontFamily: "monospace",
+        padding: "0.5rem",
+        borderRadius: 8,
+        wordBreak: "break-all",
+        pointerEvents: "none",
+      }}>
+        {debugInfo}
+      </div>
 
       {/* Camera error overlay */}
       {cameraError && (
