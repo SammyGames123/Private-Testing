@@ -163,7 +163,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const mediaPromise = navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
           width: { ideal: 1920 },
@@ -172,6 +172,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         },
         audio: true,
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(
+          "Camera timed out. Please check Settings → Privacy & Security → Camera and make sure Pulse is allowed."
+        )), 10000),
+      );
+      const stream = await Promise.race([mediaPromise, timeoutPromise]);
       streamRef.current = stream;
 
       if (videoRef.current) {

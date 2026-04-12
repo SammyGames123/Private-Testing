@@ -1,25 +1,16 @@
 import UIKit
-import WebKit
+import AVFoundation
 import Capacitor
 
-class PulseBridgeViewController: CAPBridgeViewController, WKUIDelegate {
+class PulseBridgeViewController: CAPBridgeViewController {
+    override func viewDidLoad() {
+        // Pre-request camera & mic so iOS prompts before webview needs them
+        AVCaptureDevice.requestAccess(for: .video) { _ in }
+        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        super.viewDidLoad()
+    }
+
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(SSLBypassPlugin())
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        webView?.uiDelegate = self
-    }
-
-    // Auto-grant camera & mic permission requests from the WebView
-    func webView(
-        _ webView: WKWebView,
-        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
-        initiatedByFrame frame: WKFrameInfo,
-        type: WKMediaCaptureType,
-        decisionHandler: @escaping (WKPermissionDecision) -> Void
-    ) {
-        decisionHandler(.grant)
     }
 }
