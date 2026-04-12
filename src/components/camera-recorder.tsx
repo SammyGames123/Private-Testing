@@ -21,6 +21,16 @@ function getIsNative(): boolean {
   }
 }
 
+function convertFileSrc(filePath: string): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Capacitor } = require("@capacitor/core");
+    return Capacitor.convertFileSrc(filePath);
+  } catch {
+    return filePath;
+  }
+}
+
 let _nativeCameraCache: NativeCameraPlugin | null | undefined;
 function getNativeCamera(): NativeCameraPlugin | null {
   if (_nativeCameraCache !== undefined) return _nativeCameraCache;
@@ -206,12 +216,10 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         return;
       }
       const result = await nativeCamera.open({ mode });
-      // result.filePath is a file:// URL from the native side
-      // result.type is "photo" or "video"
-      // result.duration is seconds (0 for photos)
 
-      // Fetch the file from the native filesystem
-      const response = await fetch(result.filePath);
+      // Convert file:// URL to one WKWebView can access
+      const webUrl = convertFileSrc(result.filePath);
+      const response = await fetch(webUrl);
       const blob = await response.blob();
 
       if (result.type === "photo") {
