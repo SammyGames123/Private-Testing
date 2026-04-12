@@ -6,7 +6,8 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeCameraPlugin"
     public let jsName = "NativeCamera"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
     ]
 
     private var savedCall: CAPPluginCall?
@@ -36,6 +37,49 @@ public class NativeCameraPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             cameraVC.modalPresentationStyle = .fullScreen
             vc.present(cameraVC, animated: true)
+        }
+    }
+
+    @objc func readFile(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else {
+            call.reject("Missing path parameter")
+            return
+        }
+
+        // Accept both file:// URLs and raw paths
+        var url: URL
+        if path.hasPrefix("file://") {
+            guard let parsed = URL(string: path) else {
+                call.reject("Invalid file URL")
+                return
+            }
+            url = parsed
+        } else {
+            url = URL(fileURLWithPath: path)
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let data = try Data(contentsOf: url)
+                let base64 = data.base64EncodedString()
+                let mimeType: String = {
+                    let ext = url.pathExtension.lowercased()
+                    switch ext {
+                    case "mp4", "mov": return "video/mp4"
+                    case "jpg", "jpeg": return "image/jpeg"
+                    case "png": return "image/png"
+                    case "heic": return "image/heic"
+                    default: return "application/octet-stream"
+                    }
+                }()
+                call.resolve([
+                    "data": base64,
+                    "mimeType": mimeType,
+                    "size": data.count,
+                ])
+            } catch {
+                call.reject("Failed to read file: \(error.localizedDescription)")
+            }
         }
     }
 }

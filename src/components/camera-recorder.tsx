@@ -9,6 +9,11 @@ interface NativeCameraPlugin {
     type: string;
     duration: number;
   }>;
+  readFile(options: { path: string }): Promise<{
+    data: string;
+    mimeType: string;
+    size: number;
+  }>;
 }
 
 function getIsNative(): boolean {
@@ -217,7 +222,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
       const result = await nativeCamera.open({ mode });
 
-      // Convert file:// URL to one WKWebView can display
+      // Use the converted URL for preview display (video/img src)
       const previewUrl = convertFileSrc(result.filePath);
 
       if (result.type === "photo") {
@@ -230,21 +235,23 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         setElapsed(Math.round(result.duration));
       }
 
-      // Fetch blob for upload using XMLHttpRequest (works better than fetch for local files)
-      const xhr = new XMLHttpRequest();
-      xhr.open("GET", previewUrl, true);
-      xhr.responseType = "blob";
-      xhr.onload = () => {
-        if (xhr.status === 200 || xhr.status === 0) {
-          const blob = xhr.response as Blob;
-          setRecordedBlob(blob);
-          uploadResultRef.current = null;
-          uploadInBackground(blob, userId, setUploadStatus, (uploadResult) => {
-            uploadResultRef.current = uploadResult;
-          });
-        }
-      };
-      xhr.send();
+      // Read the file via the native plugin (bypasses WKWebView file access restrictions)
+      setUploadStatus("Reading file...");
+      try {
+        const fileData = await nativeCamera.readFile({ path: result.filePath });
+        // Decode base64 to Blob
+        const binary = atob(fileData.data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: fileData.mimeType });
+        setRecordedBlob(blob);
+        uploadResultRef.current = null;
+        uploadInBackground(blob, userId, setUploadStatus, (uploadResult) => {
+          uploadResultRef.current = uploadResult;
+        });
+      } catch (readErr) {
+        setUploadStatus(`Read failed: ${readErr instanceof Error ? readErr.message : "unknown"}`);
+      }
     } catch {
       // User cancelled or error — just stay on camera screen
     } finally {
