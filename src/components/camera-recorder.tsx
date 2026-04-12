@@ -21,12 +21,16 @@ function getIsNative(): boolean {
   }
 }
 
+let _nativeCameraCache: NativeCameraPlugin | null | undefined;
 function getNativeCamera(): NativeCameraPlugin | null {
+  if (_nativeCameraCache !== undefined) return _nativeCameraCache;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { registerPlugin } = require("@capacitor/core");
-    return registerPlugin<NativeCameraPlugin>("NativeCamera");
+    _nativeCameraCache = registerPlugin<NativeCameraPlugin>("NativeCamera");
+    return _nativeCameraCache;
   } catch {
+    _nativeCameraCache = null;
     return null;
   }
 }
@@ -182,10 +186,13 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [cameraError, setCameraError] = useState("");
   const [nativeLoading, setNativeLoading] = useState(false);
   const [isNative, setIsNative] = useState(false);
+  const [platformChecked, setPlatformChecked] = useState(false);
 
   // Detect native platform on client side only
   useEffect(() => {
-    setIsNative(getIsNative());
+    const native = getIsNative();
+    setIsNative(native);
+    setPlatformChecked(true);
   }, []);
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
@@ -280,6 +287,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   }, [facingMode, flash]);
 
   useEffect(() => {
+    if (!platformChecked) return; // Wait until we know if native or web
     if (isNative) {
       // On native, launch the native camera immediately
       void openNativeCamera(captureMode);
@@ -293,7 +301,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNative, startCamera]);
+  }, [platformChecked]);
 
   // ─── Toggle flash ───
   const toggleFlash = useCallback(async () => {
