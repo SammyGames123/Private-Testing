@@ -153,6 +153,12 @@ export default async function DashboardPage() {
               const isImage = video.playback_url
                 ? inferMediaKind(video.playback_url) === "image"
                 : false;
+              // For videos without a stored thumbnail, append #t=0.1 to force
+              // the browser to render the first frame as a still image
+              const videoSrc =
+                video.playback_url && !isImage
+                  ? `${video.playback_url}#t=0.1`
+                  : video.playback_url;
               return (
                 <div
                   key={video.id}
@@ -175,12 +181,22 @@ export default async function DashboardPage() {
                           objectFit: "cover",
                         }}
                       />
+                    ) : video.thumbnail_url ? (
+                      <img
+                        alt={video.title}
+                        src={video.thumbnail_url}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
                     ) : (
                       <video
                         muted
                         playsInline
-                        preload="metadata"
-                        src={video.playback_url}
+                        preload="auto"
+                        src={videoSrc ?? undefined}
                         style={{
                           width: "100%",
                           height: "100%",
