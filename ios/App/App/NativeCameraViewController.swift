@@ -111,9 +111,17 @@ class NativeCameraViewController: UIViewController {
         videoOutput = AVCaptureMovieFileOutput()
         if session.canAddOutput(videoOutput) {
             session.addOutput(videoOutput)
-            if let conn = videoOutput.connection(with: .video),
-               conn.isVideoStabilizationSupported {
-                conn.preferredVideoStabilizationMode = .cinematic
+            if let conn = videoOutput.connection(with: .video) {
+                if conn.isVideoStabilizationSupported {
+                    conn.preferredVideoStabilizationMode = .cinematic
+                }
+                // Force H.264 codec for browser compatibility (HEVC isn't widely supported)
+                if videoOutput.availableVideoCodecTypes.contains(.h264) {
+                    videoOutput.setOutputSettings(
+                        [AVVideoCodecKey: AVVideoCodecType.h264],
+                        for: conn
+                    )
+                }
             }
         }
 
@@ -509,10 +517,8 @@ class NativeCameraViewController: UIViewController {
     // MARK: - Photo Capture
 
     private func takePhoto() {
-        var settings = AVCapturePhotoSettings()
-        if photoOutput.availablePhotoCodecTypes.contains(.hevc) {
-            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
-        }
+        // Use JPEG for broad compatibility (browsers don't support HEIC)
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         settings.flashMode = torchOn ? .on : .off
         settings.isHighResolutionPhotoEnabled = true
         if #available(iOS 16.0, *) {

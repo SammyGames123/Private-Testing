@@ -92,7 +92,8 @@ function uploadInBackground(
   const ext = isImage ? "jpg" : blob.type.includes("mp4") ? "mp4" : "webm";
   const prefix = isImage ? "photo" : "recording";
   const safeName = slugifyFileName(`${prefix}-${Date.now()}.${ext}`);
-  const bucket = isImage ? "photos" : "videos";
+  // Use a single "videos" bucket for both photos and videos
+  const bucket = "videos";
   const path = `${userId}/${Date.now()}-${safeName}`;
 
   onProgress("Uploading...");
