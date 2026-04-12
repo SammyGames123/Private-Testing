@@ -514,6 +514,22 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         style={{ filter: activeFilter.css }}
       />
 
+      {/* Loading state before camera ready */}
+      {!ready && !cameraError && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "rgba(255,255,255,0.5)",
+          fontSize: "0.9rem",
+        }}>
+          Starting camera...
+        </div>
+      )}
+
       {/* Camera error overlay */}
       {cameraError && (
         <div style={{
@@ -645,103 +661,94 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         </div>
       )}
 
-      {/* Mode toggle (Photo / Video) */}
-      {!recording && (
-        <div style={{
-          position: "absolute",
-          bottom: 120,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          gap: "1.25rem",
-          zIndex: 12,
-        }}>
-          {(["photo", "video"] as CaptureMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setCaptureMode(m)}
-              style={{
-                background: "none",
-                border: "none",
-                color: captureMode === m ? "white" : "rgba(255,255,255,0.45)",
-                fontWeight: captureMode === m ? 700 : 500,
-                fontSize: "0.95rem",
-                textTransform: "capitalize",
-                padding: "0.25rem 0.5rem",
-                borderBottom: captureMode === m ? "2px solid white" : "2px solid transparent",
-              }}
-              type="button"
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Bottom: mode toggle + capture button + upload */}
+      <div className="camera-bottom-bar" style={{ flexDirection: "column", gap: "1rem" }}>
+        {/* Mode toggle (Photo / Video) */}
+        {!recording && (
+          <div style={{ display: "flex", gap: "1.25rem", justifyContent: "center" }}>
+            {(["photo", "video"] as CaptureMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setCaptureMode(m)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: captureMode === m ? "white" : "rgba(255,255,255,0.45)",
+                  fontWeight: captureMode === m ? 700 : 500,
+                  fontSize: "0.95rem",
+                  textTransform: "capitalize",
+                  padding: "0.25rem 0.5rem",
+                  borderBottom: captureMode === m ? "2px solid white" : "2px solid transparent",
+                }}
+                type="button"
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
 
-      {/* Bottom: capture button + upload */}
-      <div className="camera-bottom-bar">
-        {recording ? (
-          <button
-            className="camera-record-btn camera-record-btn-stop"
-            onClick={stopRecording}
-            type="button"
-          >
-            <span className="camera-stop-square" />
-          </button>
-        ) : (
-          <>
-            {/* Upload from library button */}
+        {/* Capture row */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+          {/* Upload from library button */}
+          {!recording && (
             <button
               className="camera-side-btn"
               onClick={() => fileInputRef.current?.click()}
               type="button"
-              style={{ position: "absolute", left: "2rem", bottom: "2.5rem" }}
+              style={{ position: "absolute", left: "2rem" }}
             >
               <UploadIcon />
               <span style={{ fontSize: "0.65rem" }}>Upload</span>
             </button>
+          )}
 
-            {captureMode === "video" ? (
-              /* Record button (red circle) */
-              <button
-                className="camera-record-btn"
-                disabled={!ready}
-                onClick={startRecording}
-                type="button"
-              >
-                <span className="camera-record-inner" />
-              </button>
-            ) : (
-              /* Photo shutter button (white circle) */
-              <button
-                disabled={!ready}
-                onClick={takePhoto}
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: "50%",
-                  border: "4px solid white",
-                  background: "rgba(255,255,255,0.9)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0,
-                  opacity: ready ? 1 : 0.4,
-                }}
-                type="button"
-              >
-                <span style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: "50%",
-                  background: "white",
-                  display: "block",
-                }} />
-              </button>
-            )}
-          </>
-        )}
+          {recording ? (
+            <button
+              className="camera-record-btn camera-record-btn-stop"
+              onClick={stopRecording}
+              type="button"
+            >
+              <span className="camera-stop-square" />
+            </button>
+          ) : captureMode === "video" ? (
+            <button
+              className="camera-record-btn"
+              disabled={!ready}
+              onClick={startRecording}
+              type="button"
+            >
+              <span className="camera-record-inner" />
+            </button>
+          ) : (
+            <button
+              disabled={!ready}
+              onClick={takePhoto}
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: "50%",
+                border: "4px solid white",
+                background: "rgba(255,255,255,0.9)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                opacity: ready ? 1 : 0.4,
+              }}
+              type="button"
+            >
+              <span style={{
+                width: 60,
+                height: 60,
+                borderRadius: "50%",
+                background: "white",
+                display: "block",
+              }} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
