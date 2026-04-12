@@ -531,6 +531,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           justifyContent: "center",
           color: "rgba(255,255,255,0.5)",
           fontSize: "0.9rem",
+          pointerEvents: "none",
         }}>
           Starting camera...
         </div>
