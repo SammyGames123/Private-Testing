@@ -514,18 +514,20 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           </div>
           <div style={{ width: 28 }} />
         </div>
-        {!uploadDone && !uploadFailed && (
+        {!uploadDone && (
           <div style={{
             position: "absolute",
             bottom: 100,
             left: "50%",
             transform: "translateX(-50%)",
-            background: "rgba(0,0,0,0.6)",
+            background: uploadFailed ? "rgba(200,30,30,0.85)" : "rgba(0,0,0,0.6)",
             borderRadius: 20,
             padding: "0.4rem 1rem",
-            color: "rgba(255,255,255,0.7)",
+            color: "white",
             fontSize: "0.75rem",
             zIndex: 20,
+            maxWidth: "80%",
+            textAlign: "center",
           }}>
             {uploadStatus || "Preparing..."}
           </div>
@@ -567,18 +569,20 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
           </div>
           <div style={{ width: 28 }} />
         </div>
-        {!uploadDone && !uploadFailed && (
+        {!uploadDone && (
           <div style={{
             position: "absolute",
             bottom: 100,
             left: "50%",
             transform: "translateX(-50%)",
-            background: "rgba(0,0,0,0.6)",
+            background: uploadFailed ? "rgba(200,30,30,0.85)" : "rgba(0,0,0,0.6)",
             borderRadius: 20,
             padding: "0.4rem 1rem",
-            color: "rgba(255,255,255,0.7)",
+            color: "white",
             fontSize: "0.75rem",
             zIndex: 20,
+            maxWidth: "80%",
+            textAlign: "center",
           }}>
             {uploadStatus || "Preparing..."}
           </div>
