@@ -119,13 +119,13 @@ class NativeCameraViewController: UIViewController {
 
         // Photo output
         photoOutput = AVCapturePhotoOutput()
-        photoOutput.isHighResolutionCaptureEnabled = true
-        if #available(iOS 16.0, *) {
-            photoOutput.maxPhotoDimensions = currentDevice?.activeFormat.supportedMaxPhotoDimensions.last
-                ?? CMVideoDimensions(width: 4032, height: 3024)
-        }
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
+            photoOutput.isHighResolutionCaptureEnabled = true
+            if #available(iOS 16.0, *) {
+                photoOutput.maxPhotoDimensions = currentDevice?.activeFormat.supportedMaxPhotoDimensions.last
+                    ?? CMVideoDimensions(width: 4032, height: 3024)
+            }
         }
 
         session.commitConfiguration()
