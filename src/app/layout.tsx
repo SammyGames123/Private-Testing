@@ -39,16 +39,18 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const supabase = await createClient();
+  // getSession reads from cookies only (no network round-trip to Supabase)
+  // which is much faster than getUser() for the "show nav" decision
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-black">
         {children}
         <PwaBoot />
-        {user ? <BottomNav /> : null}
+        {session ? <BottomNav /> : null}
       </body>
     </html>
   );
