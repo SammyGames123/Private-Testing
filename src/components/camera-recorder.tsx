@@ -8,6 +8,7 @@ type CameraRecorderProps = {
   userId: string;
 };
 
+type CaptureMode = "photo" | "video";
 type RecordingLimit = 15 | 60 | 600;
 type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
 
@@ -41,14 +42,17 @@ function uploadInBackground(
   onDone: (result: { publicUrl: string; storagePath: string } | null) => void,
 ) {
   const supabase = createClient();
-  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-  const safeName = slugifyFileName(`recording-${Date.now()}.${ext}`);
+  const isImage = blob.type.startsWith("image/");
+  const ext = isImage ? "jpg" : blob.type.includes("mp4") ? "mp4" : "webm";
+  const prefix = isImage ? "photo" : "recording";
+  const safeName = slugifyFileName(`${prefix}-${Date.now()}.${ext}`);
+  const bucket = isImage ? "photos" : "videos";
   const path = `${userId}/${Date.now()}-${safeName}`;
 
   onProgress("Uploading...");
 
   supabase.storage
-    .from("videos")
+    .from(bucket)
     .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: blob.type })
     .then(({ error }) => {
       if (error) {
@@ -56,7 +60,7 @@ function uploadInBackground(
         onDone(null);
         return;
       }
-      const { data } = supabase.storage.from("videos").getPublicUrl(path);
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       onProgress("Uploaded");
       onDone({ publicUrl: data.publicUrl, storagePath: path });
     })
@@ -134,8 +138,10 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadResultRef = useRef<{ publicUrl: string; storagePath: string } | null>(null);
 
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("video");
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [flash, setFlash] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
@@ -289,6 +295,30 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     setRecording(false);
   }, []);
 
+  // ─── Take photo ───
+  const takePhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      setRecordedBlob(blob);
+      setPhotoUrl(url);
+      setReviewUrl(null);
+      // Start uploading immediately
+      uploadResultRef.current = null;
+      uploadInBackground(blob, userId, setUploadStatus, (result) => {
+        uploadResultRef.current = result;
+      });
+    }, "image/jpeg", 0.95);
+  }, [userId]);
+
   // ─── Handle file upload from library ───
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -307,25 +337,28 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   // ─── Retake ───
   const handleRetake = useCallback(() => {
     if (reviewUrl) URL.revokeObjectURL(reviewUrl);
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
     setRecordedBlob(null);
     setReviewUrl(null);
+    setPhotoUrl(null);
     setElapsed(0);
     setUploadStatus("");
     uploadResultRef.current = null;
     void startCamera();
-  }, [reviewUrl, startCamera]);
+  }, [reviewUrl, photoUrl, startCamera]);
 
-  // ─── Navigate to post form (upload already running/done in background) ───
+  // ─── Navigate to editor (video) or post form (photo) ───
   const handleNext = useCallback(() => {
     const result = uploadResultRef.current;
     if (result) {
-      // Upload already finished — navigate immediately
       const params = new URLSearchParams({
         storage_path: result.storagePath,
         playback_url: result.publicUrl,
         duration: String(elapsed),
       });
-      router.push(`/videos/new/edit?${params.toString()}`);
+      // Photos go straight to post, videos go to editor
+      const dest = photoUrl ? "/videos/new/post" : "/videos/new/edit";
+      router.push(`${dest}?${params.toString()}`);
     } else if (uploadStatus.startsWith("Upload failed")) {
       // Retry upload
       if (recordedBlob) {
@@ -335,7 +368,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
     }
     // else: still uploading, button shows progress
-  }, [elapsed, router, uploadStatus, recordedBlob, userId]);
+  }, [elapsed, router, uploadStatus, recordedBlob, userId, photoUrl]);
 
   const closePopups = () => {
     setShowFilters(false);
@@ -346,7 +379,62 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const uploadDone = uploadResultRef.current !== null;
   const uploadFailed = uploadStatus.startsWith("Upload failed");
 
-  // ─── Review screen after recording ───
+  // ─── Photo review screen ───
+  if (photoUrl) {
+    return (
+      <div className="camera-shell">
+        <img
+          alt="Captured photo"
+          className="camera-preview"
+          src={photoUrl}
+          style={{ objectFit: "cover" }}
+        />
+
+        <div className="camera-top-bar">
+          <button className="camera-icon-btn" onClick={handleRetake} type="button">
+            <CloseIcon />
+          </button>
+          <div className="camera-top-center">
+            <span style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>Photo</span>
+          </div>
+          <div style={{ width: 28 }} />
+        </div>
+
+        {!uploadDone && !uploadFailed && (
+          <div style={{
+            position: "absolute",
+            bottom: 100,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.6)",
+            borderRadius: 20,
+            padding: "0.4rem 1rem",
+            color: "rgba(255,255,255,0.7)",
+            fontSize: "0.75rem",
+            zIndex: 20,
+          }}>
+            {uploadStatus || "Preparing..."}
+          </div>
+        )}
+
+        <div className="camera-review-bar">
+          <button className="camera-review-btn" onClick={handleRetake} type="button">
+            Retake
+          </button>
+          <button
+            className={`camera-review-btn camera-review-next${!uploadDone && !uploadFailed ? " camera-review-uploading" : ""}`}
+            disabled={!uploadDone && !uploadFailed}
+            onClick={handleNext}
+            type="button"
+          >
+            {uploadFailed ? "Retry" : uploadDone ? "Next" : "Uploading..."}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Video review screen after recording ───
   if (reviewUrl) {
     return (
       <div className="camera-shell" onClick={closePopups}>
@@ -495,18 +583,20 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             <span>Flip</span>
           </button>
 
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTimers((v) => !v);
-              setShowFilters(false);
-            }}
-            type="button"
-          >
-            <TimerIcon />
-            <span>{limit < 60 ? `${limit}s` : limit === 60 ? "60s" : "10m"}</span>
-          </button>
+          {captureMode === "video" && (
+            <button
+              className="camera-side-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTimers((v) => !v);
+                setShowFilters(false);
+              }}
+              type="button"
+            >
+              <TimerIcon />
+              <span>{limit < 60 ? `${limit}s` : limit === 60 ? "60s" : "10m"}</span>
+            </button>
+          )}
 
           <button
             className="camera-side-btn"
@@ -555,7 +645,40 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         </div>
       )}
 
-      {/* Bottom: record button + upload */}
+      {/* Mode toggle (Photo / Video) */}
+      {!recording && (
+        <div style={{
+          position: "absolute",
+          bottom: 120,
+          left: "50%",
+          transform: "translateX(-50%)",
+          display: "flex",
+          gap: "1.25rem",
+          zIndex: 12,
+        }}>
+          {(["photo", "video"] as CaptureMode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => setCaptureMode(m)}
+              style={{
+                background: "none",
+                border: "none",
+                color: captureMode === m ? "white" : "rgba(255,255,255,0.45)",
+                fontWeight: captureMode === m ? 700 : 500,
+                fontSize: "0.95rem",
+                textTransform: "capitalize",
+                padding: "0.25rem 0.5rem",
+                borderBottom: captureMode === m ? "2px solid white" : "2px solid transparent",
+              }}
+              type="button"
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Bottom: capture button + upload */}
       <div className="camera-bottom-bar">
         {recording ? (
           <button
@@ -578,15 +701,45 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
               <span style={{ fontSize: "0.65rem" }}>Upload</span>
             </button>
 
-            {/* Record button */}
-            <button
-              className="camera-record-btn"
-              disabled={!ready}
-              onClick={startRecording}
-              type="button"
-            >
-              <span className="camera-record-inner" />
-            </button>
+            {captureMode === "video" ? (
+              /* Record button (red circle) */
+              <button
+                className="camera-record-btn"
+                disabled={!ready}
+                onClick={startRecording}
+                type="button"
+              >
+                <span className="camera-record-inner" />
+              </button>
+            ) : (
+              /* Photo shutter button (white circle) */
+              <button
+                disabled={!ready}
+                onClick={takePhoto}
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: "50%",
+                  border: "4px solid white",
+                  background: "rgba(255,255,255,0.9)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  opacity: ready ? 1 : 0.4,
+                }}
+                type="button"
+              >
+                <span style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: "50%",
+                  background: "white",
+                  display: "block",
+                }} />
+              </button>
+            )}
           </>
         )}
       </div>

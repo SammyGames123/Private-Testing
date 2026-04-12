@@ -10,6 +10,7 @@ export default function PostFormPage() {
   const playbackUrl = searchParams.get("playback_url") ?? "";
   const storagePath = searchParams.get("storage_path") ?? "";
   const duration = searchParams.get("duration") ?? "";
+  const isPhoto = /\.(jpg|jpeg|png|webp)(\?|$)/i.test(playbackUrl) || storagePath.match(/\.(jpg|jpeg|png|webp)$/i);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,8 +18,8 @@ export default function PostFormPage() {
     return (
       <main className="auth-shell">
         <div className="auth-card" style={{ textAlign: "center" }}>
-          <h1>No video found</h1>
-          <p className="auth-subtitle">Record a video first before posting.</p>
+          <h1>No content found</h1>
+          <p className="auth-subtitle">Take a photo or record a video first.</p>
           <button
             className="auth-submit"
             onClick={() => router.push("/videos/new/camera")}
@@ -46,16 +47,24 @@ export default function PostFormPage() {
   return (
     <main className="auth-shell" style={{ justifyContent: "flex-start", paddingTop: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}>
       <div style={{ width: "100%", maxWidth: 480 }}>
-        {/* Video preview */}
+        {/* Preview */}
         <div style={{ borderRadius: 16, overflow: "hidden", marginBottom: "1.25rem", maxHeight: 280 }}>
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            src={playbackUrl}
-            style={{ width: "100%", height: 280, objectFit: "cover", display: "block", background: "#111" }}
-          />
+          {isPhoto ? (
+            <img
+              alt="Preview"
+              src={playbackUrl}
+              style={{ width: "100%", height: 280, objectFit: "cover", display: "block", background: "#111" }}
+            />
+          ) : (
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              src={playbackUrl}
+              style={{ width: "100%", height: 280, objectFit: "cover", display: "block", background: "#111" }}
+            />
+          )}
         </div>
 
         <form action={handleSubmit} style={{ display: "grid", gap: "1rem" }}>
@@ -69,7 +78,7 @@ export default function PostFormPage() {
             <input
               id="title"
               name="title"
-              placeholder="Give your video a title"
+              placeholder="Give your post a title"
               required
             />
           </div>
@@ -79,7 +88,7 @@ export default function PostFormPage() {
             <textarea
               id="caption"
               name="caption"
-              placeholder="Describe your video..."
+              placeholder="Write a caption..."
               rows={3}
               style={{
                 width: "100%",
@@ -112,7 +121,7 @@ export default function PostFormPage() {
               border: "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            Retake Video
+            {isPhoto ? "Retake Photo" : "Retake Video"}
           </button>
 
           {error ? (
