@@ -89,5 +89,5 @@ export async function sendMessage(formData: FormData) {
   });
 
   revalidatePath("/messages");
-  redirect("/messages");
+  redirect(redirectTo);
 }

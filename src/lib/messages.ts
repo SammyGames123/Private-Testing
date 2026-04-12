@@ -47,7 +47,7 @@ function profileFromRelation<T>(value: T | T[] | null) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export async function getInboxData() {
+export async function getInboxData(selectedThreadId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -125,10 +125,13 @@ export async function getInboxData() {
           new Date(a.latestMessageAt).getTime(),
       );
 
-    const firstThread = threads[0];
-    if (firstThread) {
+    // If a specific thread was requested, activate it; otherwise no active thread
+    const targetThread = selectedThreadId
+      ? threads.find((t) => t.id === selectedThreadId)
+      : null;
+    if (targetThread) {
       const selectedParticipants =
-        allParticipants?.filter((row) => row.thread_id === firstThread.id) ?? [];
+        allParticipants?.filter((row) => row.thread_id === targetThread.id) ?? [];
       const otherParticipant = selectedParticipants.find((row) => row.user_id !== user.id);
       const otherProfile = otherParticipant
         ? (profileFromRelation(otherParticipant.profiles) as
@@ -136,11 +139,11 @@ export async function getInboxData() {
             | null)
         : null;
       const selectedMessages =
-        allMessages?.filter((row) => row.thread_id === firstThread.id) ?? [];
+        allMessages?.filter((row) => row.thread_id === targetThread.id) ?? [];
 
       activeThread = {
-        id: firstThread.id,
-        otherUserId: firstThread.otherUserId,
+        id: targetThread.id,
+        otherUserId: targetThread.otherUserId,
         otherUserName:
           otherProfile?.display_name ?? otherProfile?.username ?? "Creator",
         otherUserHandle: `@${otherProfile?.username ?? "creator"}`,

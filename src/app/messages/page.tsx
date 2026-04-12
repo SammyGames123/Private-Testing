@@ -1,176 +1,283 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getInboxData } from "@/lib/messages";
-import { sendMessage, startConversation } from "./actions";
+import { sendMessage } from "./actions";
 
-export default async function MessagesPage() {
-  const { user, threads, creators, activeThread } = await getInboxData();
+type MessagesPageProps = {
+  searchParams?: Promise<{ thread?: string }>;
+};
+
+export default async function MessagesPage({ searchParams }: MessagesPageProps) {
+  const resolved = await searchParams;
+  const selectedThreadId = resolved?.thread;
+  const { user, threads, activeThread } = await getInboxData(selectedThreadId);
 
   if (!user) {
     redirect("/auth/login");
   }
 
-  return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,_#f8f1e7_0%,_#efe4d5_100%)] px-4 py-8 text-[var(--ink)]">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="eyebrow">Inbox</p>
-              <h1 className="text-5xl font-semibold tracking-[-0.06em]">
-                Direct messages
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted)]">
-                Start a conversation with another creator and send messages in a
-                real Supabase-backed thread.
-              </p>
-            </div>
-
-            <Link
-              className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-              href="/dashboard"
-            >
-              Back to dashboard
-            </Link>
+  // Conversation view
+  if (activeThread) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "black",
+          color: "white",
+          display: "flex",
+          flexDirection: "column",
+          paddingBottom: "6rem",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.85rem",
+            padding: "1.25rem 1rem 0.85rem",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <Link
+            href="/messages"
+            style={{
+              color: "white",
+              textDecoration: "none",
+              fontSize: "1.5rem",
+              lineHeight: 1,
+            }}
+            aria-label="Back"
+          >
+            ‹
+          </Link>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1rem",
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.7)",
+            }}
+          >
+            {activeThread.otherUserName.charAt(0).toUpperCase()}
           </div>
-        </section>
+          <div>
+            <p style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+              {activeThread.otherUserName}
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.75rem",
+                color: "rgba(255,255,255,0.55)",
+              }}
+            >
+              {activeThread.otherUserHandle}
+            </p>
+          </div>
+        </div>
 
-        <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
-          <aside className="rounded-[32px] border border-black/10 bg-white/82 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            <p className="eyebrow">Threads</p>
-            <div className="mt-4 space-y-3">
-              {threads.length > 0 ? (
-                threads.map((thread) => (
-                  <article
-                    className="rounded-[20px] border border-black/8 bg-white/75 p-4"
-                    key={thread.id}
+        {/* Messages */}
+        <div
+          style={{
+            flex: 1,
+            padding: "1rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          }}
+        >
+          {activeThread.messages.map((message) => {
+            const fromMe = message.senderHandle === "@you";
+            return (
+              <div
+                key={message.id}
+                style={{
+                  alignSelf: fromMe ? "flex-end" : "flex-start",
+                  maxWidth: "75%",
+                  padding: "0.65rem 0.9rem",
+                  borderRadius: 18,
+                  background: fromMe ? "var(--accent)" : "rgba(255,255,255,0.1)",
+                  color: "white",
+                  fontSize: "0.9rem",
+                  lineHeight: 1.35,
+                }}
+              >
+                {message.body}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Compose */}
+        <form
+          action={sendMessage}
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            padding: "0.85rem 1rem",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            background: "black",
+          }}
+        >
+          <input type="hidden" name="thread_id" value={activeThread.id} />
+          <input
+            type="hidden"
+            name="redirect_to"
+            value={`/messages?thread=${activeThread.id}`}
+          />
+          <input
+            name="body"
+            placeholder="Message..."
+            style={{
+              flex: 1,
+              padding: "0.6rem 0.85rem",
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.05)",
+              color: "white",
+              fontSize: "0.9rem",
+              outline: "none",
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: "0.6rem 1.15rem",
+              borderRadius: 20,
+              background: "var(--accent)",
+              color: "white",
+              border: "none",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+            }}
+          >
+            Send
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  // Inbox list view
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "black",
+        color: "white",
+        padding: "1.5rem 1rem 6rem",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "1.5rem",
+          fontWeight: 700,
+          margin: "0 0 1.25rem",
+        }}
+      >
+        Inbox
+      </h1>
+
+      {threads.length === 0 ? (
+        <p
+          style={{
+            fontSize: "0.9rem",
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+            padding: "3rem 1rem",
+          }}
+        >
+          No conversations yet
+        </p>
+      ) : (
+        <div>
+          {threads.map((thread) => (
+            <Link
+              href={`/messages?thread=${thread.id}`}
+              key={thread.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.85rem",
+                padding: "0.85rem 0",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                textDecoration: "none",
+                color: "white",
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.08)",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  color: "rgba(255,255,255,0.7)",
+                }}
+              >
+                {thread.otherUserName.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginBottom: 4,
+                  }}
+                >
+                  <strong
+                    style={{
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <strong className="block text-base text-[var(--ink)]">
-                          {thread.otherUserName}
-                        </strong>
-                        <p className="mt-1 text-sm text-[var(--muted)]">
-                          {thread.otherUserHandle}
-                        </p>
-                      </div>
-                      <span className="text-xs text-[var(--muted)]">
-                        {thread.latestMessageAt}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-                      {thread.latestMessage}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <p className="text-sm leading-7 text-[var(--muted)]">
-                  No conversations yet. Start one from the creator list.
-                </p>
-              )}
-            </div>
-          </aside>
-
-          <section className="rounded-[32px] border border-black/10 bg-white/82 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            {activeThread ? (
-              <>
-                <div className="border-b border-black/8 pb-4">
-                  <p className="eyebrow">Active conversation</p>
-                  <h2 className="text-3xl font-semibold tracking-[-0.05em]">
-                    {activeThread.otherUserName}
-                  </h2>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    {activeThread.otherUserHandle}
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  {activeThread.messages.map((message) => (
-                    <article
-                      className="rounded-[20px] border border-black/8 bg-white/75 p-4"
-                      key={message.id}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <strong className="text-sm text-[var(--ink)]">
-                          {message.senderHandle}
-                        </strong>
-                        <span className="text-xs text-[var(--muted)]">
-                          {new Date(message.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                        {message.body}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-
-                <form action={sendMessage} className="mt-4 grid gap-3">
-                  <input name="thread_id" type="hidden" value={activeThread.id} />
-                  <input name="redirect_to" type="hidden" value="/messages" />
-                  <textarea
-                    className="min-h-28 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-                    name="body"
-                    placeholder={`Message ${activeThread.otherUserName}`}
-                  />
-                  <button
-                    className="rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-white"
-                    type="submit"
+                    {thread.otherUserName}
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "rgba(255,255,255,0.5)",
+                      flexShrink: 0,
+                      marginLeft: "0.5rem",
+                    }}
                   >
-                    Send message
-                  </button>
-                </form>
-              </>
-            ) : (
-              <div>
-                <p className="eyebrow">No active thread</p>
-                <h2 className="text-3xl font-semibold tracking-[-0.05em]">
-                  Start a conversation
-                </h2>
-                <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-                  Use the creator list to create your first DM thread.
+                    {thread.latestMessageAt}
+                  </span>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.8rem",
+                    color: "rgba(255,255,255,0.55)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {thread.latestMessage}
                 </p>
               </div>
-            )}
-          </section>
-
-          <aside className="rounded-[32px] border border-black/10 bg-white/82 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            <p className="eyebrow">Creators</p>
-            <div className="mt-4 space-y-3">
-              {creators.map((creator) => (
-                <article
-                  className="rounded-[20px] border border-black/8 bg-white/75 p-4"
-                  key={creator.id}
-                >
-                  <strong className="block text-base text-[var(--ink)]">
-                    {creator.name}
-                  </strong>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {creator.handle}
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-                    {creator.bio}
-                  </p>
-                  <form action={startConversation} className="mt-4">
-                    <input
-                      name="target_user_id"
-                      type="hidden"
-                      value={creator.id}
-                    />
-                    <input name="redirect_to" type="hidden" value="/messages" />
-                    <button
-                      className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold"
-                      type="submit"
-                    >
-                      Message
-                    </button>
-                  </form>
-                </article>
-              ))}
-            </div>
-          </aside>
-        </section>
-      </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

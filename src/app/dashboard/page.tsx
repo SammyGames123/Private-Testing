@@ -2,12 +2,12 @@
 import { signOut } from "@/app/auth/actions";
 import { inferMediaKind } from "@/lib/media";
 import { getCurrentProfile } from "@/lib/profiles";
-import { getCurrentUserVideos, toVideoAgeLabel } from "@/lib/videos";
+import { getCurrentUserVideos } from "@/lib/videos";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
-  const { user, profile, profileError } = await getCurrentProfile();
+  const { user, profile } = await getCurrentProfile();
 
   if (!user) {
     redirect("/auth/login");
@@ -15,209 +15,212 @@ export default async function DashboardPage() {
 
   const { videos } = await getCurrentUserVideos(user.id);
 
+  const displayName = profile?.display_name ?? profile?.username ?? "Creator";
+  const handle = profile?.username ? `@${profile.username}` : user.email ?? "";
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,_#f8f1e7_0%,_#efe4d5_100%)] px-4 py-8 text-[var(--ink)]">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-          <p className="eyebrow">Private dashboard</p>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-5xl font-semibold tracking-[-0.06em]">
-                You are signed in
-              </h1>
-              <p className="mt-4 text-base leading-7 text-[var(--muted)]">
-                Auth is now working with Supabase cookies and server-side route
-                protection.
-              </p>
-              <p className="mt-3 text-sm text-[var(--muted)]">
-                Signed in as <strong className="text-[var(--ink)]">{user.email}</strong>
-              </p>
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                Profile status:{" "}
-                <strong className="text-[var(--ink)]">
-                  {profile ? "connected" : "waiting for schema setup"}
-                </strong>
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link
-                className="rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-white"
-                href="/profile"
-              >
-                Edit profile
-              </Link>
-              <Link
-                className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-                href="/messages"
-              >
-                Inbox
-              </Link>
-              <Link
-                className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-                href="/feed"
-              >
-                Feed
-              </Link>
-              <Link
-                className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-                href="/videos/new"
-              >
-                Upload media
-              </Link>
-              <form action={signOut}>
-                <button
-                  className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-                  type="submit"
-                >
-                  Sign out
-                </button>
-              </form>
-            </div>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "black",
+        color: "white",
+        padding: "1.5rem 1rem 6rem",
+      }}
+    >
+      {/* Header: avatar, name, handle */}
+      <section style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" }}>
+        {profile?.avatar_url ? (
+          <img
+            alt={displayName}
+            src={profile.avatar_url}
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              objectFit: "cover",
+              marginTop: "1rem",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "2.25rem",
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.7)",
+              marginTop: "1rem",
+            }}
+          >
+            {initial}
           </div>
-        </section>
+        )}
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <article className="studio-panel">
-            <strong className="block text-base text-[var(--ink)]">Profile</strong>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              {profile
-                ? `@${profile.username ?? "creator"} is ready to connect to videos, follows, and comments.`
-                : "Run the Supabase SQL schema so the app can create and read profile rows."}
-            </p>
-          </article>
-          <article className="studio-panel">
-            <strong className="block text-base text-[var(--ink)]">Then</strong>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Replace demo feed data with real Supabase queries.
-            </p>
-          </article>
-          <article className="studio-panel">
-            <strong className="block text-base text-[var(--ink)]">After that</strong>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Build upload, likes, comments, follows, and messages.
-            </p>
-          </article>
-        </section>
+        <p style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0 }}>
+          {displayName}
+        </p>
+        <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.55)", margin: 0 }}>
+          {handle}
+        </p>
 
-        {profile ? (
-          <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            <p className="eyebrow">Current profile</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <article className="studio-panel">
-                <strong className="block text-base text-[var(--ink)]">Display name</strong>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  {profile.display_name ?? "Not set yet"}
-                </p>
-              </article>
-              <article className="studio-panel">
-                <strong className="block text-base text-[var(--ink)]">Username</strong>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  {profile.username ?? "Not set yet"}
-                </p>
-              </article>
-              <article className="studio-panel">
-                <strong className="block text-base text-[var(--ink)]">Bio</strong>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  {profile.bio ?? "No bio yet"}
-                </p>
-              </article>
-            </div>
-          </section>
+        {profile?.bio ? (
+          <p
+            style={{
+              fontSize: "0.85rem",
+              color: "rgba(255,255,255,0.7)",
+              maxWidth: 320,
+              textAlign: "center",
+              margin: "0.5rem 0 0",
+              lineHeight: 1.4,
+            }}
+          >
+            {profile.bio}
+          </p>
         ) : null}
+      </section>
 
-        <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="eyebrow">Your posts</p>
-              <h2 className="text-3xl font-semibold tracking-[-0.05em]">
-                Creator uploads
-              </h2>
-            </div>
-            <Link
-              className="rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-white"
-              href="/videos/new"
-            >
-              Publish another post
-            </Link>
-          </div>
+      {/* Stats row */}
+      <section
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: "2.5rem",
+          marginTop: "1.25rem",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <strong style={{ fontSize: "1.1rem" }}>{videos.length}</strong>
+          <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.55)", margin: 0 }}>
+            Posts
+          </p>
+        </div>
+      </section>
 
-          {videos.length > 0 ? (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {videos.map((video) => (
-                <article className="studio-panel" key={video.id}>
+      {/* Action buttons */}
+      <section style={{ display: "flex", gap: "0.6rem", marginTop: "1.25rem", justifyContent: "center" }}>
+        <Link
+          href="/profile"
+          style={{
+            flex: "0 1 auto",
+            padding: "0.55rem 1.25rem",
+            borderRadius: 10,
+            background: "rgba(255,255,255,0.1)",
+            color: "white",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            textDecoration: "none",
+            border: "1px solid rgba(255,255,255,0.12)",
+          }}
+        >
+          Edit profile
+        </Link>
+        <form action={signOut} style={{ display: "inline-block" }}>
+          <button
+            type="submit"
+            style={{
+              padding: "0.55rem 1.25rem",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.1)",
+              color: "white",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              border: "1px solid rgba(255,255,255,0.12)",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </form>
+      </section>
+
+      {/* Posts grid */}
+      <section style={{ marginTop: "2rem" }}>
+        {videos.length > 0 ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 4,
+            }}
+          >
+            {videos.map((video) => {
+              const isImage = video.playback_url
+                ? inferMediaKind(video.playback_url) === "image"
+                : false;
+              return (
+                <div
+                  key={video.id}
+                  style={{
+                    aspectRatio: "9 / 16",
+                    background: "rgba(255,255,255,0.05)",
+                    borderRadius: 4,
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
                   {video.playback_url ? (
-                    inferMediaKind(video.playback_url) === "image" ? (
+                    isImage ? (
                       <img
                         alt={video.title}
-                        className="mb-4 aspect-[4/5] w-full rounded-[20px] border border-black/8 object-cover"
                         src={video.playback_url}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
                       />
                     ) : (
                       <video
-                        className="mb-4 aspect-[4/5] w-full rounded-[20px] border border-black/8 bg-black object-cover"
-                        controls
                         muted
                         playsInline
+                        preload="metadata"
                         src={video.playback_url}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
                       />
                     )
                   ) : null}
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <strong className="block text-base text-[var(--ink)]">
-                        {video.title}
-                      </strong>
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                        {(video.category ?? "uncategorized") +
-                          " - " +
-                          toVideoAgeLabel(video.created_at)}
-                      </p>
-                    </div>
-                    <span className="pill">{video.visibility}</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-                    {video.caption ?? "No caption yet."}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {(video.video_tags ?? []).map((tag) => (
-                      <span className="pill" key={tag.tag}>
-                        #{tag.tag}
-                      </span>
-                    ))}
-                  </div>
-                  {video.playback_url ? (
-                    <a
-                      className="mt-4 inline-block text-sm font-semibold text-[var(--accent-2)]"
-                      href={video.playback_url}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Open playback URL
-                    </a>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-              You have not published any posts yet. Use the upload button to
-              create your first video or photo.
-            </p>
-          )}
-        </section>
-
-        {profileError ? (
-          <section className="rounded-[32px] border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            <p className="eyebrow text-amber-700">Database setup needed</p>
-            <p className="mt-3 text-sm leading-7">
-              The app can authenticate you, but the `profiles` table is not
-              available yet. Run the SQL in `supabase/schema.sql` inside the
-              Supabase SQL Editor, then refresh this page.
-            </p>
-          </section>
-        ) : null}
-      </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            style={{
+              textAlign: "center",
+              color: "rgba(255,255,255,0.5)",
+              fontSize: "0.9rem",
+              padding: "3rem 1rem",
+            }}
+          >
+            <p style={{ margin: "0 0 1rem" }}>No posts yet</p>
+            <Link
+              href="/videos/new/camera"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1.25rem",
+                borderRadius: 10,
+                background: "var(--accent)",
+                color: "white",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Create your first post
+            </Link>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
