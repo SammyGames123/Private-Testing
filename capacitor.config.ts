@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const appUrl =
-  process.env.CAPACITOR_LIVE_URL ?? "https://192.168.20.9:3000";
+  process.env.CAPACITOR_LIVE_URL ?? "https://192.168.20.61:3000";
 
 const config: CapacitorConfig = {
   appId: "au.com.imaginefashion.pulse",
