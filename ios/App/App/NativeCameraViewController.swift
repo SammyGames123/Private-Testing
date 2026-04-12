@@ -423,6 +423,7 @@ class NativeCameraViewController: UIViewController {
 
         // Mirror front camera
         if let conn = previewLayer.connection {
+            conn.automaticallyAdjustsVideoMirroring = false
             conn.isVideoMirrored = newPos == .front
         }
     }
