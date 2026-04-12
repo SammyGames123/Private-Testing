@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Capacitor, registerPlugin } from "@capacitor/core";
-
 interface NativeCameraPlugin {
   open(options: { mode: string }): Promise<{
     filePath: string;
@@ -13,7 +11,25 @@ interface NativeCameraPlugin {
   }>;
 }
 
-const NativeCamera = registerPlugin<NativeCameraPlugin>("NativeCamera");
+function getIsNative(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Capacitor } = require("@capacitor/core");
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+function getNativeCamera(): NativeCameraPlugin | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { registerPlugin } = require("@capacitor/core");
+    return registerPlugin<NativeCameraPlugin>("NativeCamera");
+  } catch {
+    return null;
+  }
+}
 
 type CameraRecorderProps = {
   userId: string;
@@ -165,15 +181,24 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [uploadStatus, setUploadStatus] = useState("");
   const [cameraError, setCameraError] = useState("");
   const [nativeLoading, setNativeLoading] = useState(false);
+  const [isNative, setIsNative] = useState(false);
 
-  const isNative = Capacitor.isNativePlatform();
+  // Detect native platform on client side only
+  useEffect(() => {
+    setIsNative(getIsNative());
+  }, []);
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
   // ─── Native camera flow (iOS) ───
   const openNativeCamera = useCallback(async (mode: CaptureMode) => {
     setNativeLoading(true);
     try {
-      const result = await NativeCamera.open({ mode });
+      const nativeCamera = getNativeCamera();
+      if (!nativeCamera) {
+        setNativeLoading(false);
+        return;
+      }
+      const result = await nativeCamera.open({ mode });
       // result.filePath is a file:// URL from the native side
       // result.type is "photo" or "video"
       // result.duration is seconds (0 for photos)
@@ -268,7 +293,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNative]);
+  }, [isNative, startCamera]);
 
   // ─── Toggle flash ───
   const toggleFlash = useCallback(async () => {
