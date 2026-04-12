@@ -8,6 +8,7 @@ type CameraRecorderProps = {
   userId: string;
 };
 
+type CaptureMode = "photo" | "video";
 type RecordingLimit = 15 | 60 | 600;
 type FilterName = "none" | "bw" | "warm" | "cool" | "vintage" | "vivid";
 
@@ -41,14 +42,17 @@ function uploadInBackground(
   onDone: (result: { publicUrl: string; storagePath: string } | null) => void,
 ) {
   const supabase = createClient();
-  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-  const safeName = slugifyFileName(`recording-${Date.now()}.${ext}`);
+  const isImage = blob.type.startsWith("image/");
+  const ext = isImage ? "jpg" : blob.type.includes("mp4") ? "mp4" : "webm";
+  const prefix = isImage ? "photo" : "recording";
+  const safeName = slugifyFileName(`${prefix}-${Date.now()}.${ext}`);
+  const bucket = isImage ? "photos" : "videos";
   const path = `${userId}/${Date.now()}-${safeName}`;
 
   onProgress("Uploading...");
 
   supabase.storage
-    .from("videos")
+    .from(bucket)
     .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: blob.type })
     .then(({ error }) => {
       if (error) {
@@ -56,7 +60,7 @@ function uploadInBackground(
         onDone(null);
         return;
       }
-      const { data } = supabase.storage.from("videos").getPublicUrl(path);
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       onProgress("Uploaded");
       onDone({ publicUrl: data.publicUrl, storagePath: path });
     })
@@ -134,8 +138,10 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadResultRef = useRef<{ publicUrl: string; storagePath: string } | null>(null);
 
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("video");
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [flash, setFlash] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
@@ -147,36 +153,26 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState("");
   const [cameraError, setCameraError] = useState("");
-  const [debugInfo, setDebugInfo] = useState("Initializing...");
 
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
 
-  // ─── Start camera (always 9:16 vertical) ───
+  // ─── Start camera — request the highest quality the device supports ───
   const startCamera = useCallback(async () => {
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) track.stop();
     }
 
-    // Debug: check if mediaDevices is available
-    setDebugInfo(`secure: ${window.isSecureContext}, mediaDevices: ${!!navigator.mediaDevices}, getUserMedia: ${!!navigator.mediaDevices?.getUserMedia}`);
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("getUserMedia not available. Page may not be in a secure context (HTTPS required).");
-      return;
-    }
-
     try {
-      setDebugInfo("Calling getUserMedia...");
+      // Request 4K at max frame rate — the browser will give the best it can
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 60, min: 30 },
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+          frameRate: { ideal: 60 },
         },
         audio: true,
       });
-      setDebugInfo("Got stream, attaching to video...");
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -198,12 +194,11 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
 
       setReady(true);
       setCameraError("");
-      setDebugInfo("Camera ready!");
     } catch (err) {
       setReady(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      setCameraError(msg);
-      setDebugInfo(`Error: ${msg}`);
+      setCameraError(
+        err instanceof Error ? err.message : "Camera access denied. Check permissions in Settings."
+      );
     }
   }, [facingMode, flash]);
 
@@ -239,7 +234,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     setFacingMode((m) => (m === "user" ? "environment" : "user"));
   }, []);
 
-  // ─── Start recording ───
+  // ─── Start recording (max quality) ───
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;
 
@@ -252,7 +247,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
 
     const recorder = new MediaRecorder(streamRef.current, {
       mimeType,
-      videoBitsPerSecond: 12_000_000,
+      videoBitsPerSecond: 20_000_000, // 20 Mbps for high quality
     });
 
     recorder.ondataavailable = (e) => {
@@ -301,6 +296,31 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     setRecording(false);
   }, []);
 
+  // ─── Take photo (full resolution from live stream) ───
+  const takePhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    // Use the actual video resolution for max quality
+    canvas.width = video.videoWidth || 3840;
+    canvas.height = video.videoHeight || 2160;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      setRecordedBlob(blob);
+      setPhotoUrl(url);
+      setReviewUrl(null);
+      // Start uploading immediately
+      uploadResultRef.current = null;
+      uploadInBackground(blob, userId, setUploadStatus, (result) => {
+        uploadResultRef.current = result;
+      });
+    }, "image/jpeg", 0.95);
+  }, [userId]);
+
   // ─── Handle file upload from library ───
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -319,25 +339,28 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   // ─── Retake ───
   const handleRetake = useCallback(() => {
     if (reviewUrl) URL.revokeObjectURL(reviewUrl);
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
     setRecordedBlob(null);
     setReviewUrl(null);
+    setPhotoUrl(null);
     setElapsed(0);
     setUploadStatus("");
     uploadResultRef.current = null;
     void startCamera();
-  }, [reviewUrl, startCamera]);
+  }, [reviewUrl, photoUrl, startCamera]);
 
-  // ─── Navigate to post form (upload already running/done in background) ───
+  // ─── Navigate to editor (video) or post form (photo) ───
   const handleNext = useCallback(() => {
     const result = uploadResultRef.current;
     if (result) {
-      // Upload already finished — navigate immediately
       const params = new URLSearchParams({
         storage_path: result.storagePath,
         playback_url: result.publicUrl,
         duration: String(elapsed),
       });
-      router.push(`/videos/new/edit?${params.toString()}`);
+      // Photos go straight to post, videos go to editor
+      const dest = photoUrl ? "/videos/new/post" : "/videos/new/edit";
+      router.push(`${dest}?${params.toString()}`);
     } else if (uploadStatus.startsWith("Upload failed")) {
       // Retry upload
       if (recordedBlob) {
@@ -347,7 +370,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
     }
     // else: still uploading, button shows progress
-  }, [elapsed, router, uploadStatus, recordedBlob, userId]);
+  }, [elapsed, router, uploadStatus, recordedBlob, userId, photoUrl]);
 
   const closePopups = () => {
     setShowFilters(false);
@@ -358,30 +381,25 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const uploadDone = uploadResultRef.current !== null;
   const uploadFailed = uploadStatus.startsWith("Upload failed");
 
-  // ─── Review screen after recording ───
-  if (reviewUrl) {
+  // ─── Photo review screen ───
+  if (photoUrl) {
     return (
-      <div className="camera-shell" onClick={closePopups}>
-        <video
-          autoPlay
+      <div className="camera-shell">
+        <img
+          alt="Captured photo"
           className="camera-preview"
-          loop
-          playsInline
-          src={reviewUrl}
+          src={photoUrl}
+          style={{ objectFit: "cover" }}
         />
-
-        {/* Top bar */}
         <div className="camera-top-bar">
           <button className="camera-icon-btn" onClick={handleRetake} type="button">
             <CloseIcon />
           </button>
           <div className="camera-top-center">
-            <span style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>Edit</span>
+            <span style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>Photo</span>
           </div>
           <div style={{ width: 28 }} />
         </div>
-
-        {/* Upload progress indicator */}
         {!uploadDone && !uploadFailed && (
           <div style={{
             position: "absolute",
@@ -398,7 +416,59 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             {uploadStatus || "Preparing..."}
           </div>
         )}
+        <div className="camera-review-bar">
+          <button className="camera-review-btn" onClick={handleRetake} type="button">
+            Retake
+          </button>
+          <button
+            className={`camera-review-btn camera-review-next${!uploadDone && !uploadFailed ? " camera-review-uploading" : ""}`}
+            disabled={!uploadDone && !uploadFailed}
+            onClick={handleNext}
+            type="button"
+          >
+            {uploadFailed ? "Retry" : uploadDone ? "Next" : "Uploading..."}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
+  // ─── Video review screen after recording ───
+  if (reviewUrl) {
+    return (
+      <div className="camera-shell" onClick={closePopups}>
+        <video
+          autoPlay
+          className="camera-preview"
+          loop
+          playsInline
+          src={reviewUrl}
+        />
+        <div className="camera-top-bar">
+          <button className="camera-icon-btn" onClick={handleRetake} type="button">
+            <CloseIcon />
+          </button>
+          <div className="camera-top-center">
+            <span style={{ color: "white", fontSize: "1rem", fontWeight: 600 }}>Preview</span>
+          </div>
+          <div style={{ width: 28 }} />
+        </div>
+        {!uploadDone && !uploadFailed && (
+          <div style={{
+            position: "absolute",
+            bottom: 100,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.6)",
+            borderRadius: 20,
+            padding: "0.4rem 1rem",
+            color: "rgba(255,255,255,0.7)",
+            fontSize: "0.75rem",
+            zIndex: 20,
+          }}>
+            {uploadStatus || "Preparing..."}
+          </div>
+        )}
         <div className="camera-review-bar">
           <button className="camera-review-btn" onClick={handleRetake} type="button">
             Retake
@@ -416,7 +486,7 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     );
   }
 
-  // ─── Camera viewfinder (TikTok-style, full screen 9:16) ───
+  // ─── Camera viewfinder ───
   return (
     <div className="camera-shell" onClick={closePopups}>
       {/* Hidden file input for upload from library */}
@@ -437,25 +507,6 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         ref={videoRef}
         style={{ filter: activeFilter.css }}
       />
-
-      {/* Debug info (temporary) */}
-      <div style={{
-        position: "absolute",
-        top: 60,
-        left: 10,
-        right: 10,
-        zIndex: 50,
-        background: "rgba(0,0,0,0.8)",
-        color: "#0f0",
-        fontSize: "0.7rem",
-        fontFamily: "monospace",
-        padding: "0.5rem",
-        borderRadius: 8,
-        wordBreak: "break-all",
-        pointerEvents: "none",
-      }}>
-        {debugInfo}
-      </div>
 
       {/* Camera error overlay */}
       {cameraError && (
@@ -526,18 +577,20 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             <span>Flip</span>
           </button>
 
-          <button
-            className="camera-side-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTimers((v) => !v);
-              setShowFilters(false);
-            }}
-            type="button"
-          >
-            <TimerIcon />
-            <span>{limit < 60 ? `${limit}s` : limit === 60 ? "60s" : "10m"}</span>
-          </button>
+          {captureMode === "video" && (
+            <button
+              className="camera-side-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTimers((v) => !v);
+                setShowFilters(false);
+              }}
+              type="button"
+            >
+              <TimerIcon />
+              <span>{limit < 60 ? `${limit}s` : limit === 60 ? "60s" : "10m"}</span>
+            </button>
+          )}
 
           <button
             className="camera-side-btn"
@@ -586,30 +639,57 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         </div>
       )}
 
-      {/* Bottom: record button + upload */}
-      <div className="camera-bottom-bar">
-        {recording ? (
-          <button
-            className="camera-record-btn camera-record-btn-stop"
-            onClick={stopRecording}
-            type="button"
-          >
-            <span className="camera-stop-square" />
-          </button>
-        ) : (
-          <>
-            {/* Upload from library button */}
+      {/* Bottom: mode toggle + capture button + upload */}
+      <div className="camera-bottom-bar" style={{ flexDirection: "column", gap: "1rem" }}>
+        {/* Mode toggle (Photo / Video) */}
+        {!recording && (
+          <div style={{ display: "flex", gap: "1.25rem", justifyContent: "center" }}>
+            {(["photo", "video"] as CaptureMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setCaptureMode(m)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: captureMode === m ? "white" : "rgba(255,255,255,0.45)",
+                  fontWeight: captureMode === m ? 700 : 500,
+                  fontSize: "0.95rem",
+                  textTransform: "capitalize",
+                  padding: "0.25rem 0.5rem",
+                  borderBottom: captureMode === m ? "2px solid white" : "2px solid transparent",
+                }}
+                type="button"
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Capture row */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+          {/* Upload from library button */}
+          {!recording && (
             <button
               className="camera-side-btn"
               onClick={() => fileInputRef.current?.click()}
               type="button"
-              style={{ position: "absolute", left: "2rem", bottom: "2.5rem" }}
+              style={{ position: "absolute", left: "2rem" }}
             >
               <UploadIcon />
               <span style={{ fontSize: "0.65rem" }}>Upload</span>
             </button>
+          )}
 
-            {/* Record button */}
+          {recording ? (
+            <button
+              className="camera-record-btn camera-record-btn-stop"
+              onClick={stopRecording}
+              type="button"
+            >
+              <span className="camera-stop-square" />
+            </button>
+          ) : captureMode === "video" ? (
             <button
               className="camera-record-btn"
               disabled={!ready}
@@ -618,8 +698,35 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
             >
               <span className="camera-record-inner" />
             </button>
-          </>
-        )}
+          ) : (
+            <button
+              disabled={!ready}
+              onClick={takePhoto}
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: "50%",
+                border: "4px solid white",
+                background: "rgba(255,255,255,0.15)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                opacity: ready ? 1 : 0.4,
+              }}
+              type="button"
+            >
+              <span style={{
+                width: 60,
+                height: 60,
+                borderRadius: "50%",
+                background: "white",
+                display: "block",
+              }} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
