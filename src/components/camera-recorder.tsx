@@ -3,6 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+interface NativeCameraPlugin {
+  open(options: { mode: string }): Promise<{
+    filePath: string;
+    type: string;
+    duration: number;
+  }>;
+}
+
+const NativeCamera = registerPlugin<NativeCameraPlugin>("NativeCamera");
 
 type CameraRecorderProps = {
   userId: string;
@@ -153,8 +164,49 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState("");
   const [cameraError, setCameraError] = useState("");
+  const [nativeLoading, setNativeLoading] = useState(false);
 
+  const isNative = Capacitor.isNativePlatform();
   const activeFilter = FILTERS.find((f) => f.name === filter) ?? FILTERS[0];
+
+  // ─── Native camera flow (iOS) ───
+  const openNativeCamera = useCallback(async (mode: CaptureMode) => {
+    setNativeLoading(true);
+    try {
+      const result = await NativeCamera.open({ mode });
+      // result.filePath is a file:// URL from the native side
+      // result.type is "photo" or "video"
+      // result.duration is seconds (0 for photos)
+
+      // Fetch the file from the native filesystem
+      const response = await fetch(result.filePath);
+      const blob = await response.blob();
+
+      if (result.type === "photo") {
+        const url = URL.createObjectURL(blob);
+        setRecordedBlob(blob);
+        setPhotoUrl(url);
+        setReviewUrl(null);
+        setElapsed(0);
+      } else {
+        const url = URL.createObjectURL(blob);
+        setRecordedBlob(blob);
+        setReviewUrl(url);
+        setPhotoUrl(null);
+        setElapsed(result.duration);
+      }
+
+      // Start uploading in background
+      uploadResultRef.current = null;
+      uploadInBackground(blob, userId, setUploadStatus, (uploadResult) => {
+        uploadResultRef.current = uploadResult;
+      });
+    } catch {
+      // User cancelled or error — just stay on camera screen
+    } finally {
+      setNativeLoading(false);
+    }
+  }, [userId]);
 
   // ─── Start camera — request the highest quality the device supports ───
   const startCamera = useCallback(async () => {
@@ -203,14 +255,20 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   }, [facingMode, flash]);
 
   useEffect(() => {
-    void startCamera();
+    if (isNative) {
+      // On native, launch the native camera immediately
+      void openNativeCamera(captureMode);
+    } else {
+      void startCamera();
+    }
     return () => {
       if (streamRef.current) {
         for (const track of streamRef.current.getTracks()) track.stop();
       }
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [startCamera]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNative]);
 
   // ─── Toggle flash ───
   const toggleFlash = useCallback(async () => {
@@ -346,8 +404,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     setElapsed(0);
     setUploadStatus("");
     uploadResultRef.current = null;
-    void startCamera();
-  }, [reviewUrl, photoUrl, startCamera]);
+    if (isNative) {
+      void openNativeCamera(captureMode);
+    } else {
+      void startCamera();
+    }
+  }, [reviewUrl, photoUrl, startCamera, isNative, openNativeCamera, captureMode]);
 
   // ─── Navigate to editor (video) or post form (photo) ───
   const handleNext = useCallback(() => {
@@ -486,7 +548,82 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
     );
   }
 
-  // ─── Camera viewfinder ───
+  // ─── Native platform: show loading or prompt to open camera ───
+  if (isNative) {
+    return (
+      <div className="camera-shell">
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "black",
+          gap: "1.5rem",
+        }}>
+          {nativeLoading ? (
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "1rem" }}>
+              Opening camera...
+            </p>
+          ) : (
+            <>
+              <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "1rem" }}>
+                Camera closed
+              </p>
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <button
+                  onClick={() => void openNativeCamera("video")}
+                  style={{
+                    padding: "0.85rem 1.5rem",
+                    borderRadius: 14,
+                    background: "var(--accent, #ff2d55)",
+                    color: "white",
+                    border: "none",
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                  }}
+                  type="button"
+                >
+                  Record Video
+                </button>
+                <button
+                  onClick={() => void openNativeCamera("photo")}
+                  style={{
+                    padding: "0.85rem 1.5rem",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,0.15)",
+                    color: "white",
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                  }}
+                  type="button"
+                >
+                  Take Photo
+                </button>
+              </div>
+              <button
+                onClick={() => router.back()}
+                style={{
+                  marginTop: "0.5rem",
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.5)",
+                  fontSize: "0.9rem",
+                }}
+                type="button"
+              >
+                Go Back
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Camera viewfinder (web fallback) ───
   return (
     <div className="camera-shell" onClick={closePopups}>
       {/* Hidden file input for upload from library */}
