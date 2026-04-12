@@ -217,30 +217,34 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
       }
       const result = await nativeCamera.open({ mode });
 
-      // Convert file:// URL to one WKWebView can access
-      const webUrl = convertFileSrc(result.filePath);
-      const response = await fetch(webUrl);
-      const blob = await response.blob();
+      // Convert file:// URL to one WKWebView can display
+      const previewUrl = convertFileSrc(result.filePath);
 
       if (result.type === "photo") {
-        const url = URL.createObjectURL(blob);
-        setRecordedBlob(blob);
-        setPhotoUrl(url);
+        setPhotoUrl(previewUrl);
         setReviewUrl(null);
         setElapsed(0);
       } else {
-        const url = URL.createObjectURL(blob);
-        setRecordedBlob(blob);
-        setReviewUrl(url);
+        setReviewUrl(previewUrl);
         setPhotoUrl(null);
-        setElapsed(result.duration);
+        setElapsed(Math.round(result.duration));
       }
 
-      // Start uploading in background
-      uploadResultRef.current = null;
-      uploadInBackground(blob, userId, setUploadStatus, (uploadResult) => {
-        uploadResultRef.current = uploadResult;
-      });
+      // Fetch blob for upload using XMLHttpRequest (works better than fetch for local files)
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", previewUrl, true);
+      xhr.responseType = "blob";
+      xhr.onload = () => {
+        if (xhr.status === 200 || xhr.status === 0) {
+          const blob = xhr.response as Blob;
+          setRecordedBlob(blob);
+          uploadResultRef.current = null;
+          uploadInBackground(blob, userId, setUploadStatus, (uploadResult) => {
+            uploadResultRef.current = uploadResult;
+          });
+        }
+      };
+      xhr.send();
     } catch {
       // User cancelled or error — just stay on camera screen
     } finally {
