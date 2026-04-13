@@ -102,14 +102,30 @@ function FeedMedia({ post, active }: FeedMediaProps) {
     }
 
     const video = videoRef.current;
-    video.muted = false;
-    video.defaultMuted = false;
-    video.volume = 1;
 
     if (!active) {
       video.pause();
+      try {
+        video.removeAttribute("src");
+        video.load();
+      } catch {
+        // ignore
+      }
       return;
     }
+
+    // Attach src only when this slide becomes active so inactive slides
+    // don't hold a media decoder slot (iOS WKWebView caps concurrent
+    // videos very aggressively — exceeding it causes black screens and
+    // stuck audio on previous slides).
+    if (post.playbackUrl && video.getAttribute("src") !== post.playbackUrl) {
+      video.setAttribute("src", post.playbackUrl);
+      video.load();
+    }
+
+    video.muted = false;
+    video.defaultMuted = false;
+    video.volume = 1;
 
     const playVideo = async () => {
       try {
@@ -146,7 +162,7 @@ function FeedMedia({ post, active }: FeedMediaProps) {
     return () => {
       video.pause();
     };
-  }, [active, mediaKind]);
+  }, [active, mediaKind, post.playbackUrl]);
 
   if (mediaKind === "image" && post.playbackUrl) {
     return (
@@ -162,13 +178,12 @@ function FeedMedia({ post, active }: FeedMediaProps) {
   if (post.playbackUrl) {
     return (
       <video
-        autoPlay
         className="feed-video"
         loop
         playsInline
         poster={post.thumbnailUrl ?? undefined}
+        preload="none"
         ref={videoRef}
-        src={post.playbackUrl}
       />
     );
   }

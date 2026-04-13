@@ -198,7 +198,7 @@ export default async function DashboardPage() {
                       <video
                         muted
                         playsInline
-                        preload="auto"
+                        preload="metadata"
                         src={videoSrc ?? undefined}
                         style={{
                           width: "100%",

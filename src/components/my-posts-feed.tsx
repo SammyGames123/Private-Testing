@@ -73,8 +73,24 @@ function SlideMedia({ video, active }: SlideMediaProps) {
 
     if (!active) {
       el.pause();
+      try {
+        el.removeAttribute("src");
+        el.load();
+      } catch {
+        // ignore
+      }
       return;
     }
+
+    // Attach src only when this slide becomes active, so inactive
+    // slides don't hold a media decoder slot (iOS WKWebView caps
+    // concurrent videos very aggressively).
+    if (video.playback_url && el.getAttribute("src") !== video.playback_url) {
+      el.setAttribute("src", video.playback_url);
+      el.load();
+    }
+
+    el.muted = false;
 
     const playVideo = async () => {
       try {
@@ -94,7 +110,7 @@ function SlideMedia({ video, active }: SlideMediaProps) {
     return () => {
       el.pause();
     };
-  }, [active, mediaKind]);
+  }, [active, mediaKind, video.playback_url]);
 
   if (mediaKind === "image" && video.playback_url) {
     return (
@@ -110,13 +126,12 @@ function SlideMedia({ video, active }: SlideMediaProps) {
   if (video.playback_url) {
     return (
       <video
-        autoPlay
         className="feed-video"
         loop
         playsInline
         poster={video.thumbnail_url ?? undefined}
+        preload="none"
         ref={videoRef}
-        src={video.playback_url}
       />
     );
   }
