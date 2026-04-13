@@ -33,9 +33,14 @@ create table if not exists public.videos (
   category text,
   duration_seconds integer,
   visibility text not null default 'public' check (visibility in ('public', 'private', 'unlisted')),
+  is_pinned boolean not null default false,
+  is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.videos add column if not exists is_pinned boolean not null default false;
+alter table public.videos add column if not exists is_archived boolean not null default false;
 
 create table if not exists public.video_tags (
   video_id uuid not null references public.videos (id) on delete cascade,
@@ -149,7 +154,7 @@ drop policy if exists "public videos are viewable by everyone signed in" on publ
 create policy "public videos are viewable by everyone signed in"
 on public.videos for select
 to authenticated
-using (visibility = 'public' or creator_id = auth.uid());
+using ((visibility = 'public' and is_archived = false) or creator_id = auth.uid());
 
 drop policy if exists "creators can insert their own videos" on public.videos;
 create policy "creators can insert their own videos"

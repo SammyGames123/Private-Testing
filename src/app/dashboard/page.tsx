@@ -160,7 +160,8 @@ export default async function DashboardPage() {
                   ? `${video.playback_url}#t=0.1`
                   : video.playback_url;
               return (
-                <div
+                <Link
+                  href={`/dashboard/posts/${video.id}`}
                   key={video.id}
                   style={{
                     aspectRatio: "9 / 16",
@@ -168,6 +169,8 @@ export default async function DashboardPage() {
                     borderRadius: 4,
                     overflow: "hidden",
                     position: "relative",
+                    display: "block",
+                    opacity: video.is_archived ? 0.45 : 1,
                   }}
                 >
                   {video.playback_url ? (
@@ -205,7 +208,44 @@ export default async function DashboardPage() {
                       />
                     )
                   ) : null}
-                </div>
+
+                  {video.is_pinned ? (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        left: 6,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: "rgba(0,0,0,0.65)",
+                        color: "white",
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      PINNED
+                    </span>
+                  ) : null}
+                  {video.is_archived ? (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: "rgba(0,0,0,0.65)",
+                        color: "white",
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      ARCHIVED
+                    </span>
+                  ) : null}
+                </Link>
               );
             })}
           </div>

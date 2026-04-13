@@ -8,6 +8,8 @@ export type VideoRecord = {
   playback_url: string | null;
   thumbnail_url: string | null;
   visibility: "public" | "private" | "unlisted";
+  is_pinned: boolean;
+  is_archived: boolean;
   created_at: string;
   video_tags: { tag: string }[] | null;
 };
@@ -48,11 +50,14 @@ export async function getCurrentUserVideos(userId: string) {
         playback_url,
         thumbnail_url,
         visibility,
+        is_pinned,
+        is_archived,
         created_at,
         video_tags (tag)
       `,
     )
     .eq("creator_id", userId)
+    .order("is_pinned", { ascending: false })
     .order("created_at", { ascending: false });
 
   return {
