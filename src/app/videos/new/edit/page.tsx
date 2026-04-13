@@ -9,6 +9,7 @@ export default function EditPage() {
   const playbackUrl = searchParams.get("playback_url") ?? "";
   const storagePath = searchParams.get("storage_path") ?? "";
   const duration = searchParams.get("duration") ?? "";
+  const thumbnailUrl = searchParams.get("thumbnail_url") ?? "";
 
   if (!playbackUrl) {
     return (
@@ -34,6 +35,7 @@ export default function EditPage() {
       videoUrl={playbackUrl}
       storagePath={storagePath}
       duration={duration}
+      thumbnailUrl={thumbnailUrl}
     />
   );
 }

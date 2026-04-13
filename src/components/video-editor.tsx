@@ -53,6 +53,7 @@ type VideoEditorProps = {
   videoUrl: string;
   storagePath: string;
   duration: string;
+  thumbnailUrl?: string;
 };
 
 // ─── Icons ───
@@ -112,7 +113,7 @@ function VolumeIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProps) {
+export function VideoEditor({ videoUrl, storagePath, duration, thumbnailUrl }: VideoEditorProps) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -298,6 +299,7 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
     // Nothing to burn in — skip processing
     if (!hasOverlays && !hasFilter) {
       const params = new URLSearchParams({ storage_path: storagePath, playback_url: videoUrl, duration });
+      if (thumbnailUrl) params.set("thumbnail_url", thumbnailUrl);
       router.push(`/videos/new/post?${params.toString()}`);
       return;
     }
@@ -457,18 +459,76 @@ export function VideoEditor({ videoUrl, storagePath, duration }: VideoEditorProp
 
       const { data } = supabase.storage.from("videos").getPublicUrl(editedPath);
 
+      // Generate a thumbnail from the edited video's first frame (with filter/overlays baked in)
+      let newThumbnailUrl: string | null = null;
+      try {
+        const thumbCanvas = document.createElement("canvas");
+        thumbCanvas.width = W;
+        thumbCanvas.height = H;
+        const thumbCtx = thumbCanvas.getContext("2d");
+        if (thumbCtx) {
+          if (hasFilter) thumbCtx.filter = activeFilter.css;
+          thumbCtx.drawImage(vid, 0, 0, W, H);
+          if (hasFilter) thumbCtx.filter = "none";
+          for (const o of overlays) {
+            const ox = (o.x / 100) * W;
+            const oy = (o.y / 100) * H;
+            thumbCtx.save();
+            thumbCtx.translate(ox, oy);
+            thumbCtx.scale(o.scale, o.scale);
+            thumbCtx.rotate((o.rotation * Math.PI) / 180);
+            if (o.type === "text" && o.text) {
+              const fontSize = Math.round(28 * scaleFactor);
+              thumbCtx.font = `800 ${fontSize}px -apple-system, BlinkMacSystemFont, "SF Pro", sans-serif`;
+              thumbCtx.textAlign = "center";
+              thumbCtx.textBaseline = "middle";
+              thumbCtx.fillStyle = o.color;
+              thumbCtx.fillText(o.text, 0, 0);
+            }
+            if (o.type === "shape") {
+              const img = shapeImages.get(o.id);
+              if (img) {
+                const size = 80 * scaleFactor;
+                thumbCtx.drawImage(img, -size / 2, -size / 2, size, size);
+              }
+            }
+            thumbCtx.restore();
+          }
+          const thumbBlob = await new Promise<Blob | null>((res) =>
+            thumbCanvas.toBlob((b) => res(b), "image/jpeg", 0.85),
+          );
+          if (thumbBlob) {
+            const thumbPath = editedPath.replace(/\.[^.]+$/, "-thumb.jpg");
+            const { error: thumbErr } = await supabase.storage
+              .from("videos")
+              .upload(thumbPath, thumbBlob, {
+                cacheControl: "3600",
+                upsert: false,
+                contentType: "image/jpeg",
+              });
+            if (!thumbErr) {
+              newThumbnailUrl = supabase.storage.from("videos").getPublicUrl(thumbPath).data.publicUrl;
+            }
+          }
+        }
+      } catch {
+        // best-effort
+      }
+
       const params = new URLSearchParams({
         storage_path: editedPath,
         playback_url: data.publicUrl,
         duration,
       });
+      const finalThumb = newThumbnailUrl ?? thumbnailUrl ?? "";
+      if (finalThumb) params.set("thumbnail_url", finalThumb);
       router.push(`/videos/new/post?${params.toString()}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Processing failed";
       setProcessProgress(msg);
       setTimeout(() => { setProcessing(false); setProcessProgress(""); }, 3000);
     }
-  }, [overlays, filter, activeFilter.css, storagePath, videoUrl, duration, muted, router]);
+  }, [overlays, filter, activeFilter.css, storagePath, videoUrl, duration, muted, router, thumbnailUrl]);
 
   const isTextMode = activeTab === "text";
 

@@ -80,12 +80,74 @@ function slugifyFileName(fileName: string) {
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}.${extension}`;
 }
 
+/** Extract the first frame of a video blob as a JPEG blob (for use as a thumbnail). */
+async function generateVideoThumbnail(videoBlob: Blob): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(videoBlob);
+    const video = document.createElement("video");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = url;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+    };
+
+    const fail = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    const capture = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 720;
+        canvas.height = video.videoHeight || 1280;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return fail();
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            cleanup();
+            resolve(blob);
+          },
+          "image/jpeg",
+          0.85,
+        );
+      } catch {
+        fail();
+      }
+    };
+
+    video.onloadeddata = () => {
+      // Seek a tiny bit past 0 so iOS actually decodes a frame
+      try {
+        video.currentTime = 0.1;
+      } catch {
+        capture();
+      }
+    };
+    video.onseeked = () => capture();
+    video.onerror = () => fail();
+
+    // Safety timeout
+    setTimeout(fail, 10000);
+  });
+}
+
 /** Upload a blob to Supabase in the background. Returns the public URL and storage path. */
 function uploadInBackground(
   blob: Blob,
   userId: string,
   onProgress: (msg: string) => void,
-  onDone: (result: { publicUrl: string; storagePath: string } | null) => void,
+  onDone: (
+    result: {
+      publicUrl: string;
+      storagePath: string;
+      thumbnailUrl: string | null;
+    } | null,
+  ) => void,
 ) {
   const supabase = createClient();
   const isImage = blob.type.startsWith("image/");
@@ -101,15 +163,39 @@ function uploadInBackground(
   supabase.storage
     .from(bucket)
     .upload(path, blob, { cacheControl: "3600", upsert: false, contentType: blob.type })
-    .then(({ error }) => {
+    .then(async ({ error }) => {
       if (error) {
         onProgress(`Upload failed: ${error.message}`);
         onDone(null);
         return;
       }
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+
+      // For videos, generate and upload a thumbnail (first frame as JPEG)
+      let thumbnailUrl: string | null = null;
+      if (!isImage) {
+        try {
+          const thumbBlob = await generateVideoThumbnail(blob);
+          if (thumbBlob) {
+            const thumbPath = `${path.replace(/\.[^.]+$/, "")}-thumb.jpg`;
+            const { error: thumbErr } = await supabase.storage
+              .from(bucket)
+              .upload(thumbPath, thumbBlob, {
+                cacheControl: "3600",
+                upsert: false,
+                contentType: "image/jpeg",
+              });
+            if (!thumbErr) {
+              thumbnailUrl = supabase.storage.from(bucket).getPublicUrl(thumbPath).data.publicUrl;
+            }
+          }
+        } catch {
+          // Thumbnail generation is best-effort
+        }
+      }
+
       onProgress("Uploaded");
-      onDone({ publicUrl: data.publicUrl, storagePath: path });
+      onDone({ publicUrl: data.publicUrl, storagePath: path, thumbnailUrl });
     })
     .catch(() => {
       onProgress("Upload failed");
@@ -183,7 +269,11 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadResultRef = useRef<{ publicUrl: string; storagePath: string } | null>(null);
+  const uploadResultRef = useRef<{
+    publicUrl: string;
+    storagePath: string;
+    thumbnailUrl: string | null;
+  } | null>(null);
 
   const [captureMode, setCaptureMode] = useState<CaptureMode>("video");
   const [ready, setReady] = useState(false);
@@ -473,6 +563,9 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         playback_url: result.publicUrl,
         duration: String(elapsed),
       });
+      if (result.thumbnailUrl) {
+        params.set("thumbnail_url", result.thumbnailUrl);
+      }
       // Photos go straight to post, videos go to editor
       const dest = photoUrl ? "/videos/new/post" : "/videos/new/edit";
       router.push(`${dest}?${params.toString()}`);

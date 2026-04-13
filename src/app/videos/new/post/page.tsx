@@ -10,6 +10,7 @@ export default function PostFormPage() {
   const playbackUrl = searchParams.get("playback_url") ?? "";
   const storagePath = searchParams.get("storage_path") ?? "";
   const duration = searchParams.get("duration") ?? "";
+  const thumbnailUrl = searchParams.get("thumbnail_url") ?? "";
   const isPhoto = /\.(jpg|jpeg|png|webp)(\?|$)/i.test(playbackUrl) || storagePath.match(/\.(jpg|jpeg|png|webp)$/i);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +72,7 @@ export default function PostFormPage() {
           <input name="playback_url" type="hidden" value={playbackUrl} />
           <input name="storage_path" type="hidden" value={storagePath} />
           <input name="duration_seconds" type="hidden" value={duration} />
+          <input name="thumbnail_url" type="hidden" value={thumbnailUrl} />
           <input name="visibility" type="hidden" value="public" />
 
           <div className="auth-field">

@@ -19,6 +19,7 @@ export async function createVideoFromCamera(formData: FormData) {
   const category = String(formData.get("category") ?? "").trim();
   const playbackUrl = String(formData.get("playback_url") ?? "").trim();
   const storagePath = String(formData.get("storage_path") ?? "").trim();
+  const thumbnailUrl = String(formData.get("thumbnail_url") ?? "").trim();
   const visibility = String(formData.get("visibility") ?? "public").trim();
   const durationSeconds = Number(formData.get("duration_seconds") ?? 0);
   const tags = String(formData.get("tags") ?? "")
@@ -39,7 +40,7 @@ export async function createVideoFromCamera(formData: FormData) {
       caption: caption || null,
       category: category || null,
       playback_url: playbackUrl,
-      thumbnail_url: null,
+      thumbnail_url: thumbnailUrl || null,
       storage_path: storagePath || null,
       visibility:
         visibility === "private" || visibility === "unlisted"
