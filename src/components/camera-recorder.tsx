@@ -344,11 +344,12 @@ export function CameraRecorder({ userId }: CameraRecorderProps) {
         setUploadStatus(`Read failed: ${readErr instanceof Error ? readErr.message : "unknown"}`);
       }
     } catch {
-      // User cancelled or error — just stay on camera screen
+      // User cancelled (or error) — leave the upload flow entirely
+      router.back();
     } finally {
       setNativeLoading(false);
     }
-  }, [userId]);
+  }, [userId, router]);
 
   // ─── Start camera — request the highest quality the device supports ───
   const startCamera = useCallback(async () => {
