@@ -110,7 +110,7 @@ struct LoginView: View {
 
     @ViewBuilder
     private func field(placeholder: String, text: Binding<String>, isSecure: Bool) -> some View {
-        let prompt = Text(placeholder).foregroundStyle(.white.opacity(0.4))
+        let prompt = Text(placeholder).foregroundColor(.white.opacity(0.4))
         Group {
             if isSecure {
                 SecureField("", text: text, prompt: prompt)
