@@ -1,0 +1,17 @@
+# Xcode user-specific
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Build outputs
+build/
+DerivedData/
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# CocoaPods (not used, but just in case)
+Pods/
