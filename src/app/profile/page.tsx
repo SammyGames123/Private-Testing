@@ -12,6 +12,34 @@ function getStringParam(
   return typeof searchParams[key] === "string" ? searchParams[key] : "";
 }
 
+const fieldStyle = {
+  width: "100%",
+  padding: "0.75rem 0.9rem",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  color: "white",
+  fontSize: "0.95rem",
+  outline: "none",
+} as const;
+
+const labelStyle = {
+  display: "block",
+  color: "rgba(255,255,255,0.75)",
+  fontSize: "0.78rem",
+  fontWeight: 600,
+  letterSpacing: "0.02em",
+  textTransform: "uppercase" as const,
+  marginBottom: "0.4rem",
+};
+
+const helperStyle = {
+  marginTop: "0.45rem",
+  color: "rgba(255,255,255,0.45)",
+  fontSize: "0.75rem",
+  lineHeight: 1.4,
+};
+
 export default async function ProfilePage(props: {
   searchParams: Promise<SearchParams>;
 }) {
@@ -27,151 +55,221 @@ export default async function ProfilePage(props: {
   const interests = profile?.interests?.join(", ") ?? "";
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,_#f8f1e7_0%,_#efe4d5_100%)] px-4 py-8 text-[var(--ink)]">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="eyebrow">Profile editor</p>
-              <h1 className="text-5xl font-semibold tracking-[-0.06em]">
-                Shape your creator identity
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted)]">
-                Update your public profile so the app can use it for feed cards,
-                follows, comments, and creator pages.
-              </p>
-            </div>
-
-            <Link
-              className="rounded-2xl border border-black/10 bg-white px-4 py-3 font-semibold"
-              href="/dashboard"
-            >
-              Back to dashboard
-            </Link>
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_340px]">
-          <section className="rounded-[32px] border border-black/10 bg-white/82 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-            <form action={saveProfile} className="space-y-5">
-              <div>
-                <label
-                  className="mb-2 block text-sm font-semibold"
-                  htmlFor="display_name"
-                >
-                  Display name
-                </label>
-                <input
-                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-                  defaultValue={profile?.display_name ?? ""}
-                  id="display_name"
-                  name="display_name"
-                  placeholder="Sammy Rivers"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold" htmlFor="username">
-                  Username
-                </label>
-                <input
-                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-                  defaultValue={profile?.username ?? ""}
-                  id="username"
-                  name="username"
-                  placeholder="sammy"
-                />
-                <p className="mt-2 text-sm text-[var(--muted)]">
-                  Letters, numbers, and underscores work best.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold" htmlFor="bio">
-                  Bio
-                </label>
-                <textarea
-                  className="min-h-32 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-                  defaultValue={profile?.bio ?? ""}
-                  id="bio"
-                  name="bio"
-                  placeholder="Builder, editor, and all-night idea collector."
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold" htmlFor="interests">
-                  Interests
-                </label>
-                <input
-                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 outline-none"
-                  defaultValue={interests}
-                  id="interests"
-                  name="interests"
-                  placeholder="music, travel, food, education"
-                />
-                <p className="mt-2 text-sm text-[var(--muted)]">
-                  Comma-separated. These will help with recommendations later.
-                </p>
-              </div>
-
-              <button
-                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-white"
-                type="submit"
-              >
-                Save profile
-              </button>
-            </form>
-
-            {success ? (
-              <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {success}
-              </p>
-            ) : null}
-
-            {error ? (
-              <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </p>
-            ) : null}
-          </section>
-
-          <aside className="space-y-6">
-            <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-              <p className="eyebrow">Current state</p>
-              <div className="mt-4 space-y-4">
-                <article className="studio-panel">
-                  <strong className="block text-base text-[var(--ink)]">Email</strong>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    {user.email}
-                  </p>
-                </article>
-                <article className="studio-panel">
-                  <strong className="block text-base text-[var(--ink)]">Username</strong>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    {profile?.username ?? "Not set"}
-                  </p>
-                </article>
-                <article className="studio-panel">
-                  <strong className="block text-base text-[var(--ink)]">Interests</strong>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    {interests || "Not set"}
-                  </p>
-                </article>
-              </div>
-            </section>
-
-            <section className="rounded-[32px] border border-black/10 bg-white/78 p-6 shadow-[0_24px_70px_rgba(74,49,29,0.12)]">
-              <p className="eyebrow">What this unlocks</p>
-              <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted)]">
-                <p>Creator cards can show your real name and bio.</p>
-                <p>Recommended feeds can use your interests later.</p>
-                <p>Comments, follows, and messages can point to your profile.</p>
-              </div>
-            </section>
-          </aside>
-        </section>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "black",
+        color: "white",
+        padding:
+          "calc(env(safe-area-inset-top, 0px) + 1rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 6rem)",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <Link
+          aria-label="Back to profile"
+          href="/dashboard"
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "white",
+            textDecoration: "none",
+          }}
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="22"
+            viewBox="0 0 24 24"
+            width="22"
+          >
+            <path
+              d="M15 6 9 12l6 6"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
+        </Link>
+        <h1
+          style={{
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            margin: 0,
+          }}
+        >
+          Edit profile
+        </h1>
+        <div style={{ width: 40 }} aria-hidden="true" />
       </div>
+
+      {/* Status messages */}
+      {success ? (
+        <p
+          style={{
+            margin: "0 0 1rem",
+            padding: "0.75rem 1rem",
+            borderRadius: 12,
+            background: "rgba(34,197,94,0.12)",
+            border: "1px solid rgba(34,197,94,0.3)",
+            color: "#4ade80",
+            fontSize: "0.85rem",
+          }}
+        >
+          {success}
+        </p>
+      ) : null}
+
+      {error ? (
+        <p
+          style={{
+            margin: "0 0 1rem",
+            padding: "0.75rem 1rem",
+            borderRadius: 12,
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            color: "#f87171",
+            fontSize: "0.85rem",
+          }}
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <form
+        action={saveProfile}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.25rem",
+        }}
+      >
+        <div>
+          <label htmlFor="display_name" style={labelStyle}>
+            Display name
+          </label>
+          <input
+            defaultValue={profile?.display_name ?? ""}
+            id="display_name"
+            name="display_name"
+            placeholder="Sammy Rivers"
+            style={fieldStyle}
+            type="text"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="username" style={labelStyle}>
+            Username
+          </label>
+          <input
+            defaultValue={profile?.username ?? ""}
+            id="username"
+            name="username"
+            placeholder="sammy"
+            style={fieldStyle}
+            type="text"
+          />
+          <p style={helperStyle}>
+            Letters, numbers, and underscores work best.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="bio" style={labelStyle}>
+            Bio
+          </label>
+          <textarea
+            defaultValue={profile?.bio ?? ""}
+            id="bio"
+            name="bio"
+            placeholder="Builder, editor, and all-night idea collector."
+            rows={4}
+            style={{ ...fieldStyle, resize: "vertical", minHeight: 110 }}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="interests" style={labelStyle}>
+            Interests
+          </label>
+          <input
+            defaultValue={interests}
+            id="interests"
+            name="interests"
+            placeholder="music, travel, food, education"
+            style={fieldStyle}
+            type="text"
+          />
+          <p style={helperStyle}>
+            Comma-separated. These help tune your recommendations.
+          </p>
+        </div>
+
+        <div
+          style={{
+            marginTop: "0.25rem",
+            padding: "0.9rem 1rem",
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: "rgba(255,255,255,0.55)",
+              fontSize: "0.72rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              fontWeight: 600,
+            }}
+          >
+            Email
+          </p>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              color: "white",
+              fontSize: "0.9rem",
+              wordBreak: "break-all",
+            }}
+          >
+            {user.email}
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          style={{
+            marginTop: "0.5rem",
+            width: "100%",
+            padding: "0.9rem 1rem",
+            borderRadius: 12,
+            background: "var(--accent)",
+            color: "white",
+            fontSize: "0.95rem",
+            fontWeight: 700,
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Save profile
+        </button>
+      </form>
     </main>
   );
 }
