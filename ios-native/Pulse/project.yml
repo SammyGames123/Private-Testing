@@ -2,7 +2,7 @@ name: Pulse
 options:
   bundleIdPrefix: au.com.imaginefashion
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
