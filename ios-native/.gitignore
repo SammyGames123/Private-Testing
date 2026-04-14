@@ -15,3 +15,7 @@ Package.resolved
 
 # CocoaPods (not used, but just in case)
 Pods/
+
+# XcodeGen output — regenerated from project.yml
+Pulse/Pulse.xcodeproj/
+Pulse/Pulse/Info.plist

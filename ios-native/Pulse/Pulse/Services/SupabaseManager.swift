@@ -8,9 +8,10 @@ import Supabase
 enum SupabaseConfig {
     static let url = URL(string: "https://qrkttpwrnquptrkewdfv.supabase.co")!
 
-    /// Paste the value of `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from
-    /// `.env.local` here. It's a long JWT starting with `eyJ...`.
-    static let anonKey = "PASTE_YOUR_ANON_KEY_HERE"
+    /// Mirrors `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Next.js
+    /// app's `.env.local`. Anon keys are public tokens gated by RLS, so
+    /// shipping them in the client binary is fine.
+    static let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFya3R0cHdybnF1cHRya2V3ZGZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0MTc1NjksImV4cCI6MjA5MDk5MzU2OX0.vB2bAd-gDg4YtPYxA34M0-zKbHOogxbBIa0GwRguIAk"
 }
 
 /// Single shared Supabase client used everywhere in the app.

@@ -6,98 +6,51 @@ serving the web build during the rewrite; once this app reaches feature
 parity we delete Capacitor (`ios/`, `android/`, `capacitor.config.ts`)
 and ship this as the iOS app.
 
+The Xcode project is **not** committed — it's generated from
+`Pulse/project.yml` by [XcodeGen](https://github.com/yonaskolb/XcodeGen),
+so adding a new Swift file is just "drop it in the right folder and
+re-run `xcodegen generate`."
+
 ## One-time setup
 
-### 1. Create the Xcode project
+```sh
+# 1. Install XcodeGen (one-off, machine-wide)
+brew install xcodegen
 
-1. Open Xcode → File → New → Project…
-2. iOS → **App** → Next
-3. Fill in:
-   - **Product Name**: `Pulse`
-   - **Team**: your Apple developer team
-   - **Organization Identifier**: `au.com.imaginefashion`
-     (this gives you the bundle ID `au.com.imaginefashion.Pulse` —
-     match it to whatever your existing TestFlight/cert is using)
-   - **Interface**: SwiftUI
-   - **Language**: Swift
-   - **Storage**: None
-   - Uncheck "Include Tests"
-4. Click Next, then **save inside `ios-native/`**. You should end up with:
+# 2. Generate the .xcodeproj from project.yml
+cd ios-native/Pulse
+xcodegen generate
 
-   ```
-   ios-native/
-     Pulse/
-       Pulse.xcodeproj
-       Pulse/
-         PulseApp.swift          ← Xcode-generated, will be replaced
-         ContentView.swift       ← Xcode-generated, will be deleted
-         Assets.xcassets/
-         Preview Content/
-   ```
-
-### 2. Add the Supabase Swift SDK
-
-In Xcode: File → Add Package Dependencies… → paste
-
-```
-https://github.com/supabase/supabase-swift
+# 3. Open it in Xcode
+open Pulse.xcodeproj
 ```
 
-→ Add Package → check `Supabase` → Add Package.
+In Xcode the first time:
 
-### 3. Drop in the source files from this folder
+1. **Signing & Capabilities** → pick your Apple developer team.
+   Bundle ID is already `au.com.imaginefashion.pulse` — match it to the
+   one your existing TestFlight/cert is using.
+2. ▶︎ Run on the Simulator or your phone. You should see a black "Pulse"
+   sign-in screen. Use the same email/password you use for the web app —
+   it's the same Supabase auth tenant.
 
-In Finder, open `ios-native/sources/`. You'll see:
+The Supabase Swift SDK is declared as an SPM dependency in
+`project.yml`, so Xcode will resolve it automatically on first open.
+The Supabase URL and anon key are baked into
+`Pulse/Pulse/Services/SupabaseManager.swift` (anon keys are public
+tokens gated by Row Level Security, safe to commit).
 
+## Re-generating after adding files
+
+Any time you add, rename, or delete a Swift file:
+
+```sh
+cd ios-native/Pulse
+xcodegen generate
 ```
-sources/
-  PulseApp.swift
-  Services/
-    SupabaseManager.swift
-  Features/
-    Auth/
-      AuthState.swift
-      LoginView.swift
-    Root/
-      RootView.swift
-    Main/
-      MainTabView.swift
-    Feed/
-      FeedView.swift
-    Profile/
-      ProfileView.swift
-```
 
-In Xcode:
-
-1. Select `PulseApp.swift` and `ContentView.swift` in the project
-   navigator → right-click → Delete → **Move to Trash**.
-2. Right-click the `Pulse` group (the inner one, with the Swift files)
-   → Add Files to "Pulse"… → navigate to `ios-native/sources/` → select
-   **everything inside** (the `PulseApp.swift` file plus the `Services/`
-   and `Features/` folders).
-3. In the dialog: ✅ "Create groups", ❌ "Copy items if needed" (so the
-   files stay in source control under `ios-native/sources/`), ✅ Add to
-   target "Pulse".
-
-### 4. Paste your Supabase anon key
-
-Open `Services/SupabaseManager.swift` and replace `PASTE_YOUR_ANON_KEY_HERE`
-with the value of `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the
-Next.js app's `.env.local`. It's a long JWT starting with `eyJ...`.
-
-### 5. Build settings
-
-- Project → Pulse → General → Minimum Deployments → **iOS 16.0** (or
-  higher).
-- Signing & Capabilities → make sure "Automatically manage signing" is
-  on and your team is selected.
-
-### 6. Run
-
-▶︎ Run on the Simulator or your phone. You should see a black "Pulse"
-sign-in screen. Use the same email/password you use for the web app —
-it's the same Supabase auth tenant.
+XcodeGen re-walks `Pulse/Pulse/` and rewrites the `.xcodeproj`. Commit
+the new `.swift` files; the `.xcodeproj` itself is gitignored.
 
 ## Status
 
@@ -112,8 +65,33 @@ it's the same Supabase auth tenant.
 
 ## Folder layout
 
-- `sources/PulseApp.swift` — `@main` app entry, owns `AuthState`.
-- `sources/Services/` — global services (Supabase client, later: image
-  cache, video pool).
-- `sources/Features/<feature>/` — one folder per feature, each with its
-  own views and view models. New screens go here.
+```
+ios-native/
+  README.md              ← you are here
+  .gitignore
+  Pulse/
+    project.yml          ← XcodeGen manifest (source of truth)
+    Pulse.xcodeproj/     ← generated, gitignored
+    Pulse/
+      PulseApp.swift             ← @main app entry, owns AuthState
+      Info.plist                 ← generated from project.yml, gitignored
+      Assets.xcassets/
+      Preview Content/
+      Services/                  ← global services (Supabase client, etc.)
+        SupabaseManager.swift
+      Features/                  ← one folder per feature
+        Auth/
+          AuthState.swift
+          LoginView.swift
+        Root/
+          RootView.swift
+        Main/
+          MainTabView.swift
+        Feed/
+          FeedView.swift
+        Profile/
+          ProfileView.swift
+```
+
+New screens go under `Features/<feature>/`. Re-run `xcodegen generate`
+after adding files and Xcode will pick them up.
