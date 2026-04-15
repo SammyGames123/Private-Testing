@@ -10,55 +10,58 @@ struct FeedVideoCell: View {
     @ObservedObject var model: FeedViewModel
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
+            // Media fills the whole cell and bleeds into the safe
+            // area, so images/video go edge-to-edge behind the tab
+            // bar.
             Color.black
-
-            if video.mediaKind == .image, let imageURL = video.playbackURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        Color.black
-                    case .empty:
-                        Color.black
-                    @unknown default:
-                        Color.black
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay { mediaLayer }
                 .clipped()
                 .ignoresSafeArea()
-            } else if let avPlayer = pool.player(for: video.id) {
-                PlayerLayerView(player: avPlayer)
-                    .ignoresSafeArea()
-            } else if let thumb = video.thumbnailURL {
-                AsyncImage(url: thumb) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color.black
-                    }
-                }
-                .ignoresSafeArea()
-            }
 
+            // Legibility gradient, anchored to the bottom of the cell.
             LinearGradient(
                 colors: [.clear, .black.opacity(0.75)],
-                startPoint: .center,
+                startPoint: .top,
                 endPoint: .bottom
             )
+            .frame(height: 280)
+            .allowsHitTesting(false)
             .ignoresSafeArea()
 
+            // Chrome stays inside the safe area so it sits ABOVE the
+            // tab bar regardless of whether the media is image or
+            // video.
             HStack(alignment: .bottom) {
                 bottomCopy
                 Spacer(minLength: 12)
                 rightRail
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 120)
-            .frame(maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 16)
+        }
+    }
+
+    @ViewBuilder
+    private var mediaLayer: some View {
+        if video.mediaKind == .image, let imageURL = video.playbackURL {
+            AsyncImage(url: imageURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.black
+            }
+        } else if let avPlayer = pool.player(for: video.id) {
+            PlayerLayerView(player: avPlayer)
+        } else if let thumb = video.thumbnailURL {
+            AsyncImage(url: thumb) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.black
+            }
         }
     }
 
