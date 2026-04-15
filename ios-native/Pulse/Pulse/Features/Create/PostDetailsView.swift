@@ -72,35 +72,36 @@ struct PostDetailsView: View {
     // MARK: - Preview
 
     private var previewSection: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(.white.opacity(0.12), lineWidth: 1)
-                )
-
-            if let imagePreview {
-                Image(uiImage: imagePreview)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-            } else if let videoThumbnail {
-                ZStack {
-                    Image(uiImage: videoThumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 42))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .shadow(radius: 6)
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color.white.opacity(0.06))
+            .frame(height: 260)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                Group {
+                    if let imagePreview {
+                        Image(uiImage: imagePreview)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else if let videoThumbnail {
+                        Image(uiImage: videoThumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .overlay {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 42))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .shadow(radius: 6)
+                            }
+                    } else {
+                        ProgressView().tint(.white)
+                    }
                 }
-            } else {
-                ProgressView().tint(.white)
             }
-        }
-        .frame(height: 260)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            }
     }
 
     // MARK: - Fields
