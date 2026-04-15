@@ -21,7 +21,7 @@ struct MainTabView: View {
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
                 .tag(Tab.search)
 
-            placeholder("Create", icon: "plus.square.fill")
+            CreateView()
                 .tabItem { Label("Create", systemImage: "plus.square.fill") }
                 .tag(Tab.create)
 

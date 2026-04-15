@@ -59,6 +59,15 @@ struct FeedView: View {
             guard let newValue else { return }
             syncPool(to: newValue)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseDidCreatePost)) { _ in
+            Task {
+                await model.load()
+                if let first = model.videos.first {
+                    activeVideoId = first.id
+                    syncPool(to: first.id)
+                }
+            }
+        }
         .onDisappear {
             pool.tearDownAll()
         }
