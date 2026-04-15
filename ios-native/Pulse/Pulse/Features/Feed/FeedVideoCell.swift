@@ -32,13 +32,17 @@ struct FeedVideoCell: View {
             // Chrome stays inside the safe area so it sits ABOVE the
             // tab bar regardless of whether the media is image or
             // video.
+            // FeedView ignores safe area so the cell spans the whole
+            // screen including behind the tab bar. Pad enough to
+            // clear a standard 49pt tab bar + 34pt home indicator
+            // safe area + breathing room.
             HStack(alignment: .bottom) {
                 bottomCopy
                 Spacer(minLength: 12)
                 rightRail
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.bottom, 100)
         }
     }
 
