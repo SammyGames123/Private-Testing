@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FeedView: View {
     @StateObject private var model = FeedViewModel()
+    @StateObject private var pool = FeedPlayerPool()
     @State private var activeVideoId: String?
 
     var body: some View {
@@ -17,7 +18,8 @@ struct FeedView: View {
                             ForEach(model.videos) { video in
                                 FeedVideoCell(
                                     video: video,
-                                    isActive: activeVideoId == video.id
+                                    pool: pool,
+                                    model: model
                                 )
                                 .frame(width: geo.size.width, height: geo.size.height)
                                 .id(video.id)
@@ -30,16 +32,41 @@ struct FeedView: View {
                     .scrollIndicators(.hidden)
                     .ignoresSafeArea()
                     .onAppear {
-                        if activeVideoId == nil {
-                            activeVideoId = model.videos.first?.id
+                        if activeVideoId == nil, let first = model.videos.first {
+                            activeVideoId = first.id
+                            syncPool(to: first.id)
                         }
                     }
                 }
             }
         }
         .ignoresSafeArea()
-        .task { await model.loadIfNeeded() }
-        .refreshable { await model.load() }
+        .task {
+            await model.loadIfNeeded()
+            if activeVideoId == nil, let first = model.videos.first {
+                activeVideoId = first.id
+                syncPool(to: first.id)
+            }
+        }
+        .refreshable {
+            await model.load()
+            if let first = model.videos.first {
+                activeVideoId = first.id
+                syncPool(to: first.id)
+            }
+        }
+        .onChange(of: activeVideoId) { _, newValue in
+            guard let newValue else { return }
+            syncPool(to: newValue)
+        }
+        .onDisappear {
+            pool.tearDownAll()
+        }
+    }
+
+    private func syncPool(to videoId: String) {
+        guard let idx = model.videos.firstIndex(where: { $0.id == videoId }) else { return }
+        pool.syncActiveWindow(videos: model.videos, activeIndex: idx)
     }
 
     @ViewBuilder

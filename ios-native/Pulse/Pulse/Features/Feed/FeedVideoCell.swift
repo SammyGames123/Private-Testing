@@ -1,21 +1,19 @@
 import SwiftUI
 import AVFoundation
-import AVKit
 
-/// One full-screen slide in the vertical feed. Owns its own
-/// `LoopingPlayer` so we can spin up / tear down AVPlayer as the cell
-/// scrolls in and out of view — keeps decoder pressure low.
+/// One full-screen slide in the vertical feed. The AVPlayer is owned
+/// by `FeedPlayerPool` — the cell just reads whatever's assigned to
+/// its video id. Everything below is thin presentation + callbacks.
 struct FeedVideoCell: View {
     let video: FeedVideo
-    let isActive: Bool
-
-    @StateObject private var player = LoopingPlayer()
+    @ObservedObject var pool: FeedPlayerPool
+    @ObservedObject var model: FeedViewModel
 
     var body: some View {
         ZStack {
             Color.black
 
-            if let avPlayer = player.player {
+            if let avPlayer = pool.player(for: video.id) {
                 PlayerLayerView(player: avPlayer)
                     .ignoresSafeArea()
             } else if let thumb = video.thumbnailURL {
@@ -37,100 +35,121 @@ struct FeedVideoCell: View {
             )
             .ignoresSafeArea()
 
-            VStack {
-                Spacer()
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(video.creatorHandle)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.white)
-                        Text(video.title)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                        if let caption = video.caption, !caption.isEmpty {
-                            Text(caption)
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.85))
-                                .lineLimit(2)
-                        }
-                    }
-                    Spacer()
+            HStack(alignment: .bottom) {
+                bottomCopy
+                Spacer(minLength: 12)
+                rightRail
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 120)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+    }
+
+    // MARK: - Bottom copy
+
+    private var bottomCopy: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(video.creatorHandle)
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+            Text(video.title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+            if let caption = video.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    // MARK: - Right rail
+
+    private var rightRail: some View {
+        VStack(spacing: 22) {
+            creatorAvatar
+            railButton(
+                system: model.isLiked(video) ? "heart.fill" : "heart",
+                tint: model.isLiked(video) ? .red : .white,
+                count: model.likeCount(for: video),
+                action: { model.toggleLike(video) }
+            )
+            railButton(
+                system: "bubble.right.fill",
+                tint: .white,
+                count: video.commentsCount,
+                action: { /* comments sheet next session */ }
+            )
+        }
+    }
+
+    private var creatorAvatar: some View {
+        let following = model.isFollowing(video.creatorId)
+        return ZStack(alignment: .bottom) {
+            Circle()
+                .fill(Color.white.opacity(0.15))
+                .frame(width: 48, height: 48)
+                .overlay(
+                    Text(String(video.creatorHandle.dropFirst().prefix(1)).uppercased())
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                )
+                .overlay(
+                    Circle().stroke(.white.opacity(0.6), lineWidth: 1)
+                )
+
+            if !following {
+                Button {
+                    model.toggleFollow(creatorId: video.creatorId)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 20, height: 20)
+                        .background(Color.accentColor)
+                        .clipShape(Circle())
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 120)
+                .offset(y: 10)
             }
         }
-        .task(id: video.id) {
-            player.load(url: video.playbackURL)
-            if isActive { player.play() }
-        }
-        .onChange(of: isActive) { _, active in
-            if active {
-                player.load(url: video.playbackURL)
-                player.play()
-            } else {
-                player.pause()
+        .padding(.bottom, following ? 0 : 10)
+    }
+
+    private func railButton(
+        system: String,
+        tint: Color,
+        count: Int,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: system)
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+                Text(Self.format(count: count))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
             }
         }
-        .onDisappear {
-            player.tearDown()
+        .buttonStyle(.plain)
+    }
+
+    private static func format(count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
         }
+        if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        }
+        return "\(count)"
     }
 }
 
-/// Minimal AVPlayer wrapper that loops when the item hits end of
-/// stream. Exposed as an ObservableObject so the cell can react to
-/// the player becoming non-nil.
-@MainActor
-final class LoopingPlayer: ObservableObject {
-    @Published private(set) var player: AVPlayer?
-
-    private var loopObserver: NSObjectProtocol?
-    private var currentURL: URL?
-
-    func load(url: URL?) {
-        guard let url else { return }
-        if currentURL == url, player != nil { return }
-        tearDown()
-
-        let item = AVPlayerItem(url: url)
-        let newPlayer = AVPlayer(playerItem: item)
-        newPlayer.actionAtItemEnd = .none
-        newPlayer.automaticallyWaitsToMinimizeStalling = true
-
-        loopObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item,
-            queue: .main
-        ) { [weak newPlayer] _ in
-            newPlayer?.seek(to: .zero)
-            newPlayer?.play()
-        }
-
-        player = newPlayer
-        currentURL = url
-    }
-
-    func play() { player?.play() }
-    func pause() { player?.pause() }
-
-    func tearDown() {
-        player?.pause()
-        if let loopObserver {
-            NotificationCenter.default.removeObserver(loopObserver)
-            self.loopObserver = nil
-        }
-        player?.replaceCurrentItem(with: nil)
-        player = nil
-        currentURL = nil
-    }
-
-    deinit {
-        if let loopObserver {
-            NotificationCenter.default.removeObserver(loopObserver)
-        }
-    }
-}
+// MARK: - AVPlayerLayer host
 
 /// UIView-backed AVPlayerLayer so we get `.resizeAspectFill` without
 /// AVPlayerViewController's system chrome.

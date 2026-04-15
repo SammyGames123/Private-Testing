@@ -1,7 +1,8 @@
 import Foundation
 
 /// One post in the feed. Decoded directly from the `videos` table plus
-/// an embedded join on `profiles` for the creator's handle/name.
+/// an embedded join on `profiles` for the creator's handle/name, and
+/// PostgREST count aggregates for likes and comments.
 struct FeedVideo: Identifiable, Decodable, Hashable {
     let id: String
     let title: String
@@ -12,6 +13,8 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
     let createdAt: String
     let creatorId: String
     let creator: Creator?
+    let likesCount: Int
+    let commentsCount: Int
 
     struct Creator: Decodable, Hashable {
         let username: String?
@@ -21,6 +24,10 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
             case username
             case displayName = "display_name"
         }
+    }
+
+    struct CountRow: Decodable, Hashable {
+        let count: Int
     }
 
     enum CodingKeys: String, CodingKey {
@@ -33,6 +40,8 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
         case createdAt = "created_at"
         case creatorId = "creator_id"
         case profiles
+        case likes
+        case comments
     }
 
     init(from decoder: Decoder) throws {
@@ -47,8 +56,8 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
         creatorId = try c.decode(String.self, forKey: .creatorId)
 
         // PostgREST returns an embedded many-to-one join as a single
-        // object, but some response shapes serialize it as a 1-element
-        // array. Tolerate both.
+        // object, but some response shapes serialize it as a
+        // one-element array. Tolerate both.
         if let single = try? c.decodeIfPresent(Creator.self, forKey: .profiles) {
             creator = single
         } else if let array = try? c.decodeIfPresent([Creator].self, forKey: .profiles) {
@@ -56,6 +65,11 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
         } else {
             creator = nil
         }
+
+        // `likes(count)` / `comments(count)` comes back as
+        // `[{"count": N}]`. Take the first row.
+        likesCount = (try? c.decodeIfPresent([CountRow].self, forKey: .likes))?.first?.count ?? 0
+        commentsCount = (try? c.decodeIfPresent([CountRow].self, forKey: .comments))?.first?.count ?? 0
     }
 
     var playbackURL: URL? {
