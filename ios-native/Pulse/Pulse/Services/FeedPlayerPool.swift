@@ -36,10 +36,12 @@ final class FeedPlayerPool: ObservableObject {
             teardown(id: id)
         }
 
-        // Spin up players for everything in the window.
+        // Spin up players for everything in the window. Skip image
+        // posts — AVPlayer can't render them and the cell falls back
+        // to AsyncImage.
         for idx in lower...upper {
             let video = videos[idx]
-            guard let url = video.playbackURL else { continue }
+            guard video.mediaKind == .video, let url = video.playbackURL else { continue }
             if players[video.id] == nil {
                 makePlayer(for: video.id, url: url)
             }

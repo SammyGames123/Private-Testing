@@ -1,5 +1,10 @@
 import Foundation
 
+enum MediaKind {
+    case video
+    case image
+}
+
 /// One post in the feed. Decoded directly from the `videos` table plus
 /// an embedded join on `profiles` for the creator's handle/name, and
 /// PostgREST count aggregates for likes and comments.
@@ -81,6 +86,21 @@ struct FeedVideo: Identifiable, Decodable, Hashable {
         guard let thumbnailUrlString, !thumbnailUrlString.isEmpty else { return nil }
         return URL(string: thumbnailUrlString)
     }
+
+    /// Some posts in the `videos` table are actually images. We infer
+    /// the kind from the playback URL's file extension — same rule
+    /// the web app uses in `src/lib/media.ts`.
+    var mediaKind: MediaKind {
+        guard let urlString = playbackUrlString else { return .video }
+        let path = URL(string: urlString)?.path ?? urlString
+        let cleaned = path.lowercased().split(whereSeparator: { "?#".contains($0) }).first.map(String.init) ?? path.lowercased()
+        let ext = (cleaned as NSString).pathExtension
+        return FeedVideo.imageExtensions.contains(ext) ? .image : .video
+    }
+
+    private static let imageExtensions: Set<String> = [
+        "jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "svg", "heic", "heif"
+    ]
 
     var creatorHandle: String {
         if let username = creator?.username, !username.isEmpty {

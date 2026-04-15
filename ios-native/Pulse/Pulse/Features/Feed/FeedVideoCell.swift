@@ -13,7 +13,23 @@ struct FeedVideoCell: View {
         ZStack {
             Color.black
 
-            if let avPlayer = pool.player(for: video.id) {
+            if video.mediaKind == .image, let imageURL = video.playbackURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        Color.black
+                    case .empty:
+                        Color.black
+                    @unknown default:
+                        Color.black
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .ignoresSafeArea()
+            } else if let avPlayer = pool.player(for: video.id) {
                 PlayerLayerView(player: avPlayer)
                     .ignoresSafeArea()
             } else if let thumb = video.thumbnailURL {
