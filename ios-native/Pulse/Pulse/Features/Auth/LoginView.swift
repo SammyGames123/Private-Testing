@@ -30,18 +30,37 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LoopingVideoBackground(
+                resourceName: "login-loop",
+                resourceExtension: "mp4"
+            )
+            .ignoresSafeArea()
+
+            // Dark gradient — heavier at the bottom where the form sits — so
+            // white text and input fields stay legible over moving footage.
+            LinearGradient(
+                colors: [
+                    .black.opacity(0.25),
+                    .black.opacity(0.55),
+                    .black.opacity(0.85)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             VStack(spacing: 20) {
                 Spacer()
 
-                Text("Pulse")
-                    .font(.system(size: 44, weight: .bold))
+                Text("Spilltop")
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
 
                 Text(mode.subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
 
                 VStack(spacing: 12) {
                     field(
@@ -106,6 +125,7 @@ struct LoginView: View {
             }
             .padding(.horizontal, 24)
         }
+        .dismissKeyboardOnTap()
     }
 
     @ViewBuilder
@@ -120,12 +140,13 @@ struct LoginView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(Color.white.opacity(0.06))
+        .background(.ultraThinMaterial)
+        .background(Color.black.opacity(0.25))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .foregroundStyle(.white)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(.white.opacity(0.1))
+                .stroke(.white.opacity(0.2), lineWidth: 1)
         )
     }
 

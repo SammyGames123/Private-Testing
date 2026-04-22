@@ -27,3 +27,18 @@ final class SupabaseManager {
         )
     }
 }
+
+extension SupabaseManager {
+    func currentSession() async -> Session? {
+        try? await client.auth.session
+    }
+
+    func currentAccessToken() async -> String? {
+        await currentSession()?.accessToken
+    }
+
+    func currentUserId() async -> String? {
+        guard let session = await currentSession() else { return nil }
+        return session.user.id.uuidString.lowercased()
+    }
+}

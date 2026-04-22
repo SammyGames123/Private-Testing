@@ -20,9 +20,20 @@ final class AuthState: ObservableObject {
         }
         isLoading = false
 
+        if session != nil {
+            await SafetyService.shared.refreshBlockedUsers()
+            await PushNotificationService.shared.requestAuthorizationIfNeeded()
+        }
+
         for await (event, newSession) in client.auth.authStateChanges {
             _ = event
             session = newSession
+            if newSession != nil {
+                await SafetyService.shared.refreshBlockedUsers(forceRefresh: true)
+                await PushNotificationService.shared.requestAuthorizationIfNeeded()
+            } else {
+                SafetyService.shared.reset()
+            }
         }
     }
 
@@ -32,6 +43,8 @@ final class AuthState: ObservableObject {
             password: password
         )
         self.session = session
+        await SafetyService.shared.refreshBlockedUsers(forceRefresh: true)
+        await PushNotificationService.shared.requestAuthorizationIfNeeded()
     }
 
     func signUp(email: String, password: String) async throws {
@@ -43,7 +56,9 @@ final class AuthState: ObservableObject {
     }
 
     func signOut() async {
+        await PushNotificationService.shared.clearTokenForCurrentUser()
         try? await client.auth.signOut()
         session = nil
+        SafetyService.shared.reset()
     }
 }

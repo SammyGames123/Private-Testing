@@ -227,7 +227,7 @@ struct CameraCaptureView: View {
             if isVideo {
                 let ext = utType?.preferredFilenameExtension ?? "mov"
                 let tempURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("pulse-picked-\(UUID().uuidString).\(ext)")
+                    .appendingPathComponent("spilltop-picked-\(UUID().uuidString).\(ext)")
                 try data.write(to: tempURL)
                 pickerItem = nil
                 onCapture(.video(tempURL))

@@ -1,8 +1,30 @@
 import SwiftUI
 import AVFoundation
+import UIKit
+
+/// AppDelegate adaptor exists only to catch APNs callbacks, which SwiftUI
+/// doesn't expose directly. Everything else lives in the app entry point.
+final class PulseAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Task { @MainActor in
+            PushNotificationService.shared.handleDeviceToken(deviceToken)
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[SpilltopApp] APNs registration failed: \(error)")
+    }
+}
 
 @main
 struct PulseApp: App {
+    @UIApplicationDelegateAdaptor(PulseAppDelegate.self) private var appDelegate
     @StateObject private var authState = AuthState()
 
     init() {

@@ -43,7 +43,7 @@ final class CameraController: NSObject, ObservableObject {
     // MARK: - AVFoundation
 
     let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "pulse.camera.session")
+    private let sessionQueue = DispatchQueue(label: "spilltop.camera.session")
 
     private var videoDeviceInput: AVCaptureDeviceInput?
     private var audioDeviceInput: AVCaptureDeviceInput?
@@ -153,7 +153,7 @@ final class CameraController: NSObject, ObservableObject {
             }
 
             let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("pulse-\(UUID().uuidString).mov")
+                .appendingPathComponent("spilltop-\(UUID().uuidString).mov")
             self.movieOutput.startRecording(to: tempURL, recordingDelegate: self)
             DispatchQueue.main.async { self.isRecording = true }
         }

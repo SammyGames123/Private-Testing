@@ -1,0 +1,2 @@
+[functions.livekit-session]
+verify_jwt = false
