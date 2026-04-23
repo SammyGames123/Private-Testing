@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { login } from "../actions";
+import { requestPasswordReset } from "../actions";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-export default async function LoginPage(props: {
+export default async function ForgotPasswordPage(props: {
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await props.searchParams;
@@ -14,52 +14,37 @@ export default async function LoginPage(props: {
   const next =
     typeof searchParams.next === "string" && searchParams.next.startsWith("/")
       ? searchParams.next
-      : "";
+      : "/admin";
 
   return (
     <main className="auth-shell">
       <div className="auth-card">
-        <p className="auth-logo">Pulse</p>
-        <h1>Welcome back</h1>
+        <p className="auth-logo">Spilltop</p>
+        <h1>Reset password</h1>
         <p className="auth-subtitle">
-          Sign in to your account to continue
+          Enter your admin email and we&apos;ll send a secure reset link.
         </p>
 
-        <form action={login} className="auth-form">
-          {next ? <input name="next" type="hidden" value={next} /> : null}
+        <form action={requestPasswordReset} className="auth-form">
+          <input name="next" type="hidden" value={next} />
 
           <div className="auth-field">
             <label htmlFor="email">Email</label>
             <input
+              autoComplete="email"
+              defaultValue="support@spilltop.com"
               id="email"
               name="email"
-              placeholder="you@example.com"
+              placeholder="support@spilltop.com"
               required
               type="email"
             />
           </div>
 
-          <div className="auth-field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              name="password"
-              placeholder="Your password"
-              required
-              type="password"
-            />
-          </div>
-
           <button className="auth-submit" type="submit">
-            Sign in
+            Send reset link
           </button>
         </form>
-
-        <p className="auth-helper-link">
-          <Link href={`/auth/forgot-password${next ? `?next=${encodeURIComponent(next)}` : ""}`}>
-            Forgot password?
-          </Link>
-        </p>
 
         {message ? (
           <p className="auth-message auth-message-success">{message}</p>
@@ -70,8 +55,7 @@ export default async function LoginPage(props: {
         ) : null}
 
         <p className="auth-footer">
-          Don&apos;t have an account?{" "}
-          <Link href="/auth/sign-up">Sign up</Link>
+          Remembered it? <Link href={`/auth/login?next=${encodeURIComponent(next)}`}>Back to login</Link>
         </p>
       </div>
     </main>
