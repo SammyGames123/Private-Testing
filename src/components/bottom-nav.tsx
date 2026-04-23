@@ -145,7 +145,11 @@ export function BottomNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (pathname.startsWith("/auth") || pathname.startsWith("/videos/new/camera")) {
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/videos/new/camera")
+  ) {
     return null;
   }
 

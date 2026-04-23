@@ -41,7 +41,7 @@ function getNativeCamera(): NativeCameraPlugin | null {
   if (_nativeCameraCache !== undefined) return _nativeCameraCache;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { registerPlugin } = require("@capacitor/core");
+    const { registerPlugin } = require("@capacitor/core") as typeof import("@capacitor/core");
     _nativeCameraCache = registerPlugin<NativeCameraPlugin>("NativeCamera");
     return _nativeCameraCache;
   } catch {
