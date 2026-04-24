@@ -112,6 +112,11 @@ function formatCoordinate(value: number | null | undefined) {
 
 export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const backgroundDragRef = useRef<{
+    pointerId: number;
+    startPoint: Point;
+    startCenter: { latitude: number; longitude: number };
+  } | null>(null);
   const [zoom, setZoom] = useState(17);
   const [size, setSize] = useState({ width: 860, height: 460 });
   const [selectedVenueId, setSelectedVenueId] = useState(venues[0]?.id ?? "");
@@ -126,6 +131,7 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
   });
   const [draftCoordinates, setDraftCoordinates] = useState<Record<string, { latitude: number; longitude: number }>>({});
   const [draggingVenueId, setDraggingVenueId] = useState<string | null>(null);
+  const [isPanningMap, setIsPanningMap] = useState(false);
 
   const selectedVenue = venues.find((venue) => venue.id === selectedVenueId) ?? venues[0];
   const selectedCoordinate = selectedVenue
@@ -181,6 +187,51 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
     }));
   }
 
+  function beginMapPan(event: PointerEvent<HTMLDivElement>) {
+    const point = mapPointFromEvent(event);
+    if (!point) {
+      return;
+    }
+
+    backgroundDragRef.current = {
+      pointerId: event.pointerId,
+      startPoint: point,
+      startCenter: center,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanningMap(true);
+  }
+
+  function updateMapPan(event: PointerEvent<HTMLDivElement>) {
+    const drag = backgroundDragRef.current;
+    if (!drag || drag.pointerId != event.pointerId) {
+      return;
+    }
+
+    const point = mapPointFromEvent(event);
+    if (!point) {
+      return;
+    }
+
+    const deltaX = point.x - drag.startPoint.x;
+    const deltaY = point.y - drag.startPoint.y;
+    const startWorldX = lonToWorldX(drag.startCenter.longitude, zoom);
+    const startWorldY = latToWorldY(drag.startCenter.latitude, zoom);
+
+    setMapCenter({
+      latitude: worldYToLat(startWorldY - deltaY, zoom),
+      longitude: worldXToLon(startWorldX - deltaX, zoom),
+    });
+  }
+
+  function endMapPan(event: PointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    backgroundDragRef.current = null;
+    setIsPanningMap(false);
+  }
+
   return (
     <section className="admin-panel admin-map-panel">
       <div className="admin-section-heading">
@@ -222,8 +273,30 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
       </div>
 
       <div
-        className="admin-drag-map"
-        onPointerDown={syncSize}
+        className={`admin-drag-map${isPanningMap ? " panning" : ""}`}
+        onPointerDown={(event) => {
+          syncSize();
+          if (event.target !== event.currentTarget || draggingVenueId) {
+            return;
+          }
+          beginMapPan(event);
+        }}
+        onPointerMove={(event) => {
+          if (backgroundDragRef.current) {
+            event.preventDefault();
+            updateMapPan(event);
+          }
+        }}
+        onPointerUp={(event) => {
+          if (backgroundDragRef.current?.pointerId === event.pointerId) {
+            endMapPan(event);
+          }
+        }}
+        onPointerCancel={(event) => {
+          if (backgroundDragRef.current?.pointerId === event.pointerId) {
+            endMapPan(event);
+          }
+        }}
         ref={mapRef}
         style={{ touchAction: "none" }}
       >

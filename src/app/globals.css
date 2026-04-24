@@ -512,7 +512,11 @@ p {
   border-radius: 26px;
   background: #122033;
   user-select: none;
-  cursor: default;
+  cursor: grab;
+}
+
+.admin-drag-map.panning {
+  cursor: grabbing;
 }
 
 .admin-map-tile {
