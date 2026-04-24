@@ -389,8 +389,16 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
       </div>
 
       {selectedVenue ? (
-        <form action={updateVenueCoordinatesAction} className="admin-map-save-row">
+        <form action={updateVenueCoordinatesAction} className="admin-map-save-row" key={selectedVenue.id}>
           <input name="id" type="hidden" value={selectedVenue.id} />
+          <label>
+            Name
+            <input defaultValue={selectedVenue.name} name="name" required />
+          </label>
+          <label>
+            Slug
+            <input defaultValue={selectedVenue.slug} name="slug" required />
+          </label>
           <label>
             Latitude
             <input
@@ -434,7 +442,7 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
             />
           </label>
           <button className="admin-primary-button" type="submit">
-            Save pin
+            Save venue
           </button>
           <a
             className="admin-secondary-link"

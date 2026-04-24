@@ -133,16 +133,20 @@ export async function createVenueAction(formData: FormData) {
 export async function updateVenueCoordinatesAction(formData: FormData) {
   const { admin, user } = await requireAdminClient();
   const id = stringValue(formData, "id");
+  const name = stringValue(formData, "name");
+  const slug = stringValue(formData, "slug");
   const latitude = numberValue(formData, "latitude");
   const longitude = numberValue(formData, "longitude");
 
-  if (!id || latitude == null || longitude == null) {
-    throw new Error("Venue, latitude, and longitude are required.");
+  if (!id || !name || !slug || latitude == null || longitude == null) {
+    throw new Error("Venue, name, slug, latitude, and longitude are required.");
   }
 
   const { error } = await admin
     .from("venues")
     .update({
+      name,
+      slug,
       latitude,
       longitude,
       updated_at: new Date().toISOString(),
@@ -154,6 +158,8 @@ export async function updateVenueCoordinatesAction(formData: FormData) {
   }
 
   await recordAdminAction(admin, user.id, "venue.move", "venue", id, {
+    name,
+    slug,
     latitude,
     longitude,
   });
