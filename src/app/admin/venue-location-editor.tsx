@@ -115,6 +115,15 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
   const [zoom, setZoom] = useState(17);
   const [size, setSize] = useState({ width: 860, height: 460 });
   const [selectedVenueId, setSelectedVenueId] = useState(venues[0]?.id ?? "");
+  const [mapCenter, setMapCenter] = useState(() => {
+    const initialVenue = venues.find((venue) => venue.latitude != null && venue.longitude != null);
+    return initialVenue
+      ? {
+          latitude: initialVenue.latitude ?? DEFAULT_CENTER.latitude,
+          longitude: initialVenue.longitude ?? DEFAULT_CENTER.longitude,
+        }
+      : DEFAULT_CENTER;
+  });
   const [draftCoordinates, setDraftCoordinates] = useState<Record<string, { latitude: number; longitude: number }>>({});
   const [draggingVenueId, setDraggingVenueId] = useState<string | null>(null);
 
@@ -126,7 +135,7 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
       }
     : DEFAULT_CENTER;
 
-  const center = selectedCoordinate;
+  const center = mapCenter;
   const tiles = useMemo(() => tileRange(center, zoom, size), [center.latitude, center.longitude, zoom, size]);
 
   useEffect(() => {
@@ -182,7 +191,19 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
         <div className="admin-map-controls">
           <select
             aria-label="Select venue"
-            onChange={(event) => setSelectedVenueId(event.target.value)}
+            onChange={(event) => {
+              const nextVenueId = event.target.value;
+              const nextVenue = venues.find((venue) => venue.id === nextVenueId);
+              const nextCoordinate = nextVenue
+                ? draftCoordinates[nextVenueId] ?? {
+                    latitude: nextVenue.latitude ?? DEFAULT_CENTER.latitude,
+                    longitude: nextVenue.longitude ?? DEFAULT_CENTER.longitude,
+                  }
+                : DEFAULT_CENTER;
+
+              setSelectedVenueId(nextVenueId);
+              setMapCenter(nextCoordinate);
+            }}
             value={selectedVenue?.id ?? ""}
           >
             {venues.map((venue) => (
@@ -221,8 +242,6 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
           />
         ))}
 
-        <div className="admin-map-crosshair" />
-
         {venues.map((venue) => {
           const coordinate = draftCoordinates[venue.id] ?? {
             latitude: venue.latitude,
@@ -245,24 +264,48 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
           return (
             <button
               aria-label={`Move ${venue.name}`}
-              className={selected ? "admin-map-pin selected" : "admin-map-pin"}
+              className={[
+                "admin-map-pin",
+                selected ? "selected" : "",
+                draggingVenueId === venue.id ? "dragging" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               key={venue.id}
               onClick={() => setSelectedVenueId(venue.id)}
               onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
                 event.currentTarget.setPointerCapture(event.pointerId);
                 setSelectedVenueId(venue.id);
                 setDraggingVenueId(venue.id);
                 updateDraggedVenue(event, venue.id);
               }}
               onPointerMove={(event) => {
-                if (draggingVenueId === venue.id) {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.preventDefault();
                   updateDraggedVenue(event, venue.id);
                 }
               }}
-              onPointerUp={() => setDraggingVenueId(null)}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                setDraggingVenueId(null);
+              }}
+              onPointerCancel={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                setDraggingVenueId(null);
+              }}
+              onDragStart={(event) => {
+                event.preventDefault();
+              }}
               style={{
                 left: point.x,
                 top: point.y,
+                touchAction: "none",
               }}
               type="button"
             >
