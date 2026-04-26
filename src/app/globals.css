@@ -1091,6 +1091,12 @@ p {
   -webkit-backdrop-filter: blur(18px);
 }
 
+.auth-card-compact {
+  max-width: 380px;
+  padding-top: 1.75rem;
+  text-align: center;
+}
+
 .auth-card .auth-logo {
   font-size: 1.8rem;
   font-weight: 800;
@@ -1173,6 +1179,13 @@ p {
   opacity: 0.8;
 }
 
+.auth-submit-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .auth-helper-link {
   margin: 1rem 0 0;
   text-align: center;
@@ -1212,6 +1225,18 @@ p {
 .auth-message-error {
   background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
+}
+
+.auth-handoff-note {
+  margin-top: 0.7rem;
+}
+
+.auth-handoff-actions {
+  margin-top: 1.6rem;
+}
+
+.auth-footer-compact {
+  margin-top: 0.9rem;
 }
 
 @media (max-width: 640px) {

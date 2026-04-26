@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSiteUrl } from "@/lib/site-url";
+import { getAuthSiteUrl } from "@/lib/site-url";
 import { getStatusRedirect } from "@/lib/utils";
 import { redirect } from "next/navigation";
 
@@ -35,11 +35,11 @@ export async function requestPasswordReset(formData: FormData) {
   const next = String(formData.get("next") ?? "");
   const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
   const supabase = await createClient();
-  const siteUrl = await getSiteUrl();
+  const authSiteUrl = await getAuthSiteUrl();
   const resetPath = `/auth/reset-password?next=${encodeURIComponent(safeNext)}`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(resetPath)}`,
+    redirectTo: `${authSiteUrl}/auth/callback?next=${encodeURIComponent(resetPath)}`,
   });
 
   if (error) {
@@ -94,14 +94,14 @@ export async function updatePassword(formData: FormData) {
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const siteUrl = await getSiteUrl();
+  const authSiteUrl = await getAuthSiteUrl();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${siteUrl}/auth/callback`,
+      emailRedirectTo: `${authSiteUrl}/auth/confirm`,
     },
   });
 
