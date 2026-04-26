@@ -4,7 +4,7 @@ function trimTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
-const FALLBACK_PUBLIC_SITE_URL = "https://spilltop.com";
+const FALLBACK_PUBLIC_SITE_URL = "https://admin.spilltop.com";
 
 export async function getSiteUrl() {
   const explicitUrl =
