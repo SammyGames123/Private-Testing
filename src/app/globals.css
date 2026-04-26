@@ -1097,12 +1097,37 @@ p {
   text-align: center;
 }
 
+.auth-shell-confirm::after {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(204, 92, 255, 0.28), transparent 24%),
+    radial-gradient(circle at 50% 58%, rgba(137, 51, 255, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.66) 100%);
+}
+
+.auth-card-confirm {
+  border-color: rgba(214, 141, 255, 0.24);
+  background:
+    linear-gradient(180deg, rgba(27, 9, 46, 0.8), rgba(11, 4, 24, 0.9));
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.52),
+    0 0 0 1px rgba(212, 127, 255, 0.08),
+    0 0 48px rgba(166, 71, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .auth-card .auth-logo {
   font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   color: var(--accent);
   text-align: center;
+}
+
+.auth-logo-confirm {
+  color: #d58cff;
+  text-shadow:
+    0 0 16px rgba(201, 96, 255, 0.45),
+    0 0 36px rgba(147, 51, 234, 0.22);
 }
 
 .auth-card h1 {
@@ -1186,6 +1211,14 @@ p {
   text-decoration: none;
 }
 
+.auth-submit-confirm {
+  background:
+    linear-gradient(135deg, #d14bff 0%, #8b3dff 52%, #6b2bff 100%);
+  box-shadow:
+    0 12px 28px rgba(124, 58, 237, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
 .auth-helper-link {
   margin: 1rem 0 0;
   text-align: center;
@@ -1233,6 +1266,59 @@ p {
 
 .auth-handoff-actions {
   margin-top: 1.6rem;
+}
+
+.auth-confirm-emblem {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+}
+
+.auth-confirm-emblem-ring {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  border-radius: 999px;
+  border: 1px solid rgba(224, 168, 255, 0.45);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.18), transparent 26%),
+    radial-gradient(circle at center, rgba(178, 72, 255, 0.34), rgba(82, 21, 141, 0.12));
+  box-shadow:
+    0 0 26px rgba(176, 76, 255, 0.38),
+    inset 0 0 26px rgba(176, 76, 255, 0.18);
+}
+
+.auth-confirm-emblem-ring::before,
+.auth-confirm-emblem-ring::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(221, 157, 255, 0.92);
+  box-shadow: 0 0 14px rgba(209, 75, 255, 0.55);
+}
+
+.auth-confirm-emblem-ring::before {
+  width: 18px;
+  height: 18px;
+  top: -4px;
+  right: 8px;
+}
+
+.auth-confirm-emblem-ring::after {
+  width: 10px;
+  height: 10px;
+  top: 12px;
+  right: -4px;
+}
+
+.auth-confirm-emblem-core {
+  position: absolute;
+  inset: 22px;
+  border-radius: 999px;
+  border: 2px solid rgba(240, 211, 255, 0.72);
+  box-shadow:
+    0 0 16px rgba(232, 159, 255, 0.42),
+    inset 0 0 16px rgba(163, 74, 255, 0.2);
 }
 
 .auth-footer-compact {

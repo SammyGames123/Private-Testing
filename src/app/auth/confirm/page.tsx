@@ -49,9 +49,14 @@ export default function ConfirmAccountPage() {
   const appCallbackUrl = buildAppCallbackUrl();
 
   return (
-    <main className="auth-shell auth-shell-branded">
-      <div className="auth-card auth-card-branded auth-card-compact">
-        <p className="auth-logo">Spilltop</p>
+    <main className="auth-shell auth-shell-branded auth-shell-confirm">
+      <div className="auth-card auth-card-branded auth-card-compact auth-card-confirm">
+        <div className="auth-confirm-emblem" aria-hidden="true">
+          <div className="auth-confirm-emblem-ring">
+            <span className="auth-confirm-emblem-core" />
+          </div>
+        </div>
+        <p className="auth-logo auth-logo-confirm">Spilltop</p>
         <h1>Account confirmed</h1>
         <p className="auth-subtitle auth-handoff-note">
           {statusText}
@@ -61,7 +66,7 @@ export default function ConfirmAccountPage() {
         </p>
 
         <div className="auth-handoff-actions">
-          <a className="auth-submit auth-submit-link" href={appCallbackUrl}>
+          <a className="auth-submit auth-submit-link auth-submit-confirm" href={appCallbackUrl}>
             Open Spilltop
           </a>
           <p className="auth-footer auth-footer-compact">
