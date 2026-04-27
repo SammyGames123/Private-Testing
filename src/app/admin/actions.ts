@@ -22,6 +22,25 @@ function numberValue(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function storagePathFromPublicUrl(publicUrl: string | null, bucketId: string) {
+  if (!publicUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(publicUrl);
+    const marker = `/storage/v1/object/public/${bucketId}/`;
+    const index = url.pathname.indexOf(marker);
+    if (index === -1) {
+      return null;
+    }
+    const path = decodeURIComponent(url.pathname.slice(index + marker.length));
+    return path.length > 0 ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 async function recordAdminAction(
   admin: SupabaseClient,
   actorId: string,
@@ -231,6 +250,70 @@ export async function archiveReportedVideoAction(formData: FormData) {
 
   await recordAdminAction(admin, user.id, "video.archive_from_report", "video", videoId, {
     report_id: reportId,
+  });
+
+  revalidatePath("/admin");
+}
+
+export async function deleteReportedVideoAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+  const reportId = stringValue(formData, "report_id");
+  const videoId = stringValue(formData, "video_id");
+
+  if (!reportId || !videoId) {
+    throw new Error("Report id and video id are required.");
+  }
+
+  const { data: videoRow, error: fetchError } = await admin
+    .from("videos")
+    .select("storage_path, playback_url, thumbnail_url")
+    .eq("id", videoId)
+    .maybeSingle<{
+      storage_path: string | null;
+      playback_url: string | null;
+      thumbnail_url: string | null;
+    }>();
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  const storagePaths = new Set<string>();
+  if (videoRow?.storage_path) {
+    storagePaths.add(videoRow.storage_path);
+  }
+
+  const playbackStoragePath = storagePathFromPublicUrl(videoRow?.playback_url ?? null, "videos");
+  if (playbackStoragePath) {
+    storagePaths.add(playbackStoragePath);
+  }
+
+  const thumbnailStoragePath = storagePathFromPublicUrl(videoRow?.thumbnail_url ?? null, "videos");
+  if (thumbnailStoragePath) {
+    storagePaths.add(thumbnailStoragePath);
+  }
+
+  const { error: deleteError } = await admin
+    .from("videos")
+    .delete()
+    .eq("id", videoId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  if (storagePaths.size > 0) {
+    try {
+      await admin.storage.from("videos").remove(Array.from(storagePaths));
+    } catch {
+      // The post row is already gone. Do not block the moderation action if
+      // storage cleanup lags behind.
+    }
+  }
+
+  await recordAdminAction(admin, user.id, "video.delete_from_report", "video", videoId, {
+    report_id: reportId,
+    removed_paths: Array.from(storagePaths),
   });
 
   revalidatePath("/admin");

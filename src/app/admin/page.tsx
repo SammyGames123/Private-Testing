@@ -2,6 +2,7 @@
 import {
   archiveReportedVideoAction,
   createVenueAction,
+  deleteReportedVideoAction,
   saveVenueAction,
   updateReportStatusAction,
 } from "@/app/admin/actions";
@@ -394,13 +395,22 @@ export default async function AdminPage() {
                         <button type="submit">Dismiss</button>
                       </form>
                       {video ? (
-                        <form action={archiveReportedVideoAction}>
-                          <input name="report_id" type="hidden" value={report.id} />
-                          <input name="video_id" type="hidden" value={video.id} />
-                          <button className="danger" type="submit">
-                            Archive video
-                          </button>
-                        </form>
+                        <>
+                          <form action={archiveReportedVideoAction}>
+                            <input name="report_id" type="hidden" value={report.id} />
+                            <input name="video_id" type="hidden" value={video.id} />
+                            <button className="danger" type="submit">
+                              Archive post
+                            </button>
+                          </form>
+                          <form action={deleteReportedVideoAction}>
+                            <input name="report_id" type="hidden" value={report.id} />
+                            <input name="video_id" type="hidden" value={video.id} />
+                            <button className="danger" type="submit">
+                              Delete post
+                            </button>
+                          </form>
+                        </>
                       ) : (
                         <form action={updateReportStatusAction}>
                           <input name="id" type="hidden" value={report.id} />
