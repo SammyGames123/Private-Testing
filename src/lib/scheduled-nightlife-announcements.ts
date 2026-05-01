@@ -6,49 +6,49 @@ export type ScheduledAnnouncement = {
 };
 
 const fridayTitles = [
-  "Friday starts here",
-  "Friday plans sorted",
-  "Your Friday move",
-  "Friday feels loaded",
-  "Fresh Friday energy",
-  "Friday night is on",
-  "Tonight’s your night",
-  "Friday’s looking loud",
-  "Time to make Friday count",
-  "Weekend mode starts now",
-  "Friday just got better",
-  "The Friday group chat can relax",
-  "Friday, handled",
+  "Friday plans? Sorted",
+  "What’s the move tonight?",
+  "Friday is starting to move",
+  "Your Friday shortcut",
+  "Group chat going nowhere?",
+  "Friday’s looking better already",
+  "Tonight’s answer is easier",
+  "Don’t wing Friday",
+  "Friday is warming up",
+  "Less maybe, more move",
+  "Weekend mode is here",
+  "Friday’s got options",
+  "Start with Spilltop",
 ] as const;
 
 const fridayBodies = [
-  "Open Spilltop, see who’s moving, and lock in your first stop before the group chat drifts.",
-  "Find the busiest spots, check who’s already out, and turn your maybe-plans into a real night.",
-  "If you’re heading out later, get the lay of the night now and keep your best options close.",
-  "The map is live, the feed is moving, and your Friday answer is probably already on Spilltop.",
+  "Open Spilltop, check who’s out, and lock in somewhere good before the group chat starts guessing.",
+  "See what’s actually moving tonight and save yourself from getting sent somewhere dead.",
+  "If you’re heading out later, get a quick read on the night now and keep your best options close.",
+  "The feed is moving, the map is live, and your Friday plan is probably already on Spilltop.",
 ] as const;
 
 const saturdayTitles = [
-  "Saturday is calling",
+  "Saturday is moving",
   "Big Saturday energy",
-  "Saturday plans, upgraded",
-  "Your Saturday lineup",
-  "Saturday starts with Spilltop",
-  "Tonight’s going to move",
-  "Saturday mode: on",
-  "The night is warming up",
-  "See where Saturday is happening",
+  "Don’t get sent somewhere mid",
   "Your Saturday shortcut",
-  "Make tonight easier",
-  "Saturday just found its pace",
-  "Ready for the main event?",
+  "See where it’s actually happening",
+  "Saturday plans, handled",
+  "Tonight’s going to be loud",
+  "The night is picking up",
+  "Skip the bad call",
+  "Saturday starts here",
+  "Know the vibe before you go",
+  "Tonight needs a better plan",
+  "Main character Saturday",
 ] as const;
 
 const saturdayBodies = [
-  "The busiest rooms, the best moments, and the people already out are waiting in Spilltop.",
-  "Before you bounce between group chats, check who’s live, who’s out, and where the night’s building.",
-  "Saturday moves fast. Open Spilltop, read the room, and head where the energy actually is.",
-  "Your next venue, the real crowd, and tonight’s momentum are already easier to read on Spilltop.",
+  "Check Spilltop first and go where the crowd, the moments, and the energy are actually lining up.",
+  "Before the group chat sends you in circles, see who’s out and where tonight is really building.",
+  "Saturday moves fast. Open Spilltop, read the room, and head where the night is actually good.",
+  "Your next venue is easier to pick when you can see the real vibe before you even get there.",
 ] as const;
 
 function buildRotatingMessages(
