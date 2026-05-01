@@ -416,6 +416,7 @@ p {
 
 .admin-form-grid input,
 .admin-form-grid select,
+.admin-form-grid textarea,
 .admin-map-save-row input,
 .admin-map-controls select {
   width: 100%;
@@ -429,10 +430,17 @@ p {
 
 .admin-form-grid input:focus,
 .admin-form-grid select:focus,
+.admin-form-grid textarea:focus,
 .admin-map-save-row input:focus,
 .admin-map-controls select:focus {
   border-color: rgba(114, 241, 255, 0.7);
   box-shadow: 0 0 0 3px rgba(114, 241, 255, 0.12);
+}
+
+.admin-form-textarea {
+  min-height: 110px;
+  resize: vertical;
+  font: inherit;
 }
 
 .admin-form-wide {

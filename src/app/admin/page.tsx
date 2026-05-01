@@ -4,6 +4,7 @@ import {
   createVenueAction,
   deleteReportedVideoAction,
   saveVenueAction,
+  sendBroadcastNotificationAction,
   updateReportStatusAction,
 } from "@/app/admin/actions";
 import { VenueLocationEditor, type AdminVenueMapItem } from "@/app/admin/venue-location-editor";
@@ -268,6 +269,39 @@ export default async function AdminPage() {
       <VenueLocationEditor venues={activeVenues.filter((venue) => venue.latitude != null && venue.longitude != null)} />
 
       <section className="admin-grid">
+        <div className="admin-panel">
+          <div className="admin-section-heading">
+            <div>
+              <p className="admin-kicker">Push everyone</p>
+              <h2>Broadcast announcement</h2>
+            </div>
+          </div>
+
+          <form action={sendBroadcastNotificationAction} className="admin-form-grid">
+            <label className="admin-form-wide">
+              Title
+              <input name="title" maxLength={80} placeholder="Tonight on Spilltop" required />
+            </label>
+            <label className="admin-form-wide">
+              Message
+              <textarea
+                className="admin-form-textarea"
+                name="body"
+                maxLength={180}
+                placeholder="Tell everyone what’s happening."
+                required
+                rows={4}
+              />
+            </label>
+            <p className="admin-meta-line admin-form-wide">
+              Sends a push announcement to every user with a registered device token. Tapping it opens the notification center in the app.
+            </p>
+            <button className="admin-primary-button admin-form-wide" type="submit">
+              Send broadcast
+            </button>
+          </form>
+        </div>
+
         <div className="admin-panel">
           <div className="admin-section-heading">
             <div>
