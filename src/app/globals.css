@@ -733,6 +733,27 @@ p {
   justify-content: flex-end;
 }
 
+.admin-venue-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-venue-delete-button {
+  border: 1px solid rgba(255, 120, 148, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 69, 104, 0.16);
+  color: #ffb8c5;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 11px 14px;
+}
+
+.admin-venue-delete-button:hover {
+  background: rgba(255, 69, 104, 0.22);
+}
+
 .admin-venue-empty {
   min-height: 280px;
   display: grid;

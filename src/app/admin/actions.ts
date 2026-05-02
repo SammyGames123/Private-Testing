@@ -82,6 +82,41 @@ export async function saveVenueAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+export async function deleteVenueAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+  const id = stringValue(formData, "id");
+
+  if (!id) {
+    throw new Error("Missing venue id.");
+  }
+
+  const { data: existingVenue, error: fetchError } = await admin
+    .from("venues")
+    .select("id, name, slug")
+    .eq("id", id)
+    .maybeSingle<{ id: string; name: string; slug: string }>();
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  if (!existingVenue) {
+    throw new Error("Venue not found.");
+  }
+
+  const { error } = await admin.from("venues").delete().eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recordAdminAudit(admin, user.id, "venue.delete", "venue", id, {
+    name: existingVenue.name,
+    slug: existingVenue.slug,
+  });
+
+  revalidatePath("/admin");
+}
+
 export async function createVenueAction(formData: FormData) {
   const { admin, user } = await requireAdminClient();
 

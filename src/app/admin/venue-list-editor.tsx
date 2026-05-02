@@ -1,7 +1,7 @@
 "use client";
 
-import { saveVenueAction } from "@/app/admin/actions";
-import { useEffect, useState } from "react";
+import { deleteVenueAction, saveVenueAction } from "@/app/admin/actions";
+import { type MouseEvent, useEffect, useState } from "react";
 
 type AdminVenueEditorVenue = {
   id: string;
@@ -118,6 +118,16 @@ export function VenueListEditor({
       setSelectedVenueId(sortedVenues[0].id);
     }
   }, [selectedVenueId, sortedVenues]);
+
+  function confirmVenueDelete(event: MouseEvent<HTMLButtonElement>, venueName: string) {
+    const confirmed = window.confirm(
+      `Delete ${venueName}? Existing posts will keep their history without the venue, and related check-ins will be removed.`,
+    );
+
+    if (!confirmed) {
+      event.preventDefault();
+    }
+  }
 
   return (
     <section className="admin-panel">
@@ -294,9 +304,23 @@ export function VenueListEditor({
                   <input name="featured" defaultChecked={selectedVenue.featured} type="checkbox" />
                   Featured
                 </label>
-                <button className="admin-primary-button" type="submit">
-                  Save venue
-                </button>
+                <p className="admin-form-wide admin-meta-line">
+                  Deleting this venue removes linked check-ins and popular times, and older posts or lives will simply
+                  lose their venue tag.
+                </p>
+                <div className="admin-form-wide admin-venue-form-actions">
+                  <button className="admin-primary-button" type="submit">
+                    Save venue
+                  </button>
+                  <button
+                    className="admin-venue-delete-button"
+                    formAction={deleteVenueAction}
+                    onClick={(event) => confirmVenueDelete(event, selectedVenue.name)}
+                    type="submit"
+                  >
+                    Delete venue
+                  </button>
+                </div>
               </div>
             </form>
           ) : (
