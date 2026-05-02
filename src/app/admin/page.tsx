@@ -7,6 +7,7 @@ import {
   sendBroadcastNotificationAction,
   updateReportStatusAction,
 } from "@/app/admin/actions";
+import { VenueListEditor } from "@/app/admin/venue-list-editor";
 import { VenueLocationEditor, type AdminVenueMapItem } from "@/app/admin/venue-location-editor";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -464,100 +465,7 @@ export default async function AdminPage() {
           </div>
         </div>
       </section>
-
-      <section className="admin-panel">
-        <div className="admin-section-heading">
-          <div>
-            <p className="admin-kicker">Venues</p>
-            <h2>Refine, hide, and repair</h2>
-          </div>
-          <p>{venues.length} total rows loaded</p>
-        </div>
-
-        <div className="admin-venue-list">
-          {venues.map((venue) => (
-            <form action={saveVenueAction} className="admin-venue-card" key={venue.id}>
-              <input name="id" type="hidden" value={venue.id} />
-              <div className="admin-venue-title-row">
-                <div>
-                  <input className="admin-venue-name" name="name" defaultValue={venue.name} />
-                  <p>{venue.slug}</p>
-                </div>
-                <span className={venue.is_active ? "admin-status status-actioned" : "admin-status status-dismissed"}>
-                  {venue.is_active ? "active" : "hidden"}
-                </span>
-              </div>
-
-              <div className="admin-form-grid compact">
-                <label>
-                  Slug
-                  <input name="slug" defaultValue={venue.slug} />
-                </label>
-                <label>
-                  Category
-                  <select name="category" defaultValue={venue.category ?? "bar"}>
-                    {venueCategories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Area
-                  <input name="area" defaultValue={venue.area} />
-                </label>
-                <label>
-                  City
-                  <input name="city" defaultValue={venue.city} />
-                </label>
-                <label>
-                  Latitude
-                  <input name="latitude" defaultValue={venue.latitude ?? ""} step="0.0000001" type="number" />
-                </label>
-                <label>
-                  Longitude
-                  <input name="longitude" defaultValue={venue.longitude ?? ""} step="0.0000001" type="number" />
-                </label>
-                <label>
-                  Priority
-                  <input name="launch_priority" defaultValue={venue.launch_priority ?? 0} type="number" />
-                </label>
-                <label>
-                  Price
-                  <input name="price_level" defaultValue={venue.price_level ?? ""} max="4" min="1" type="number" />
-                </label>
-                <label className="admin-form-wide">
-                  Address
-                  <input name="address" defaultValue={venue.address ?? ""} />
-                </label>
-                <label className="admin-form-wide">
-                  Vibe
-                  <input name="vibe_blurb" defaultValue={venue.vibe_blurb ?? ""} />
-                </label>
-                <label>
-                  Score
-                  <input name="nightlife_score" defaultValue={venue.nightlife_score ?? ""} max="10" min="1" type="number" />
-                </label>
-                <label className="admin-checkbox">
-                  <input name="is_active" defaultChecked={venue.is_active} type="checkbox" />
-                  Active
-                </label>
-                <label className="admin-checkbox">
-                  <input name="featured" defaultChecked={venue.featured} type="checkbox" />
-                  Featured
-                </label>
-                <button className="admin-primary-button" type="submit">
-                  Save
-                </button>
-              </div>
-              <p className="admin-meta-line">
-                Google: {venue.google_place_name || venue.google_place_id || "none"} | Updated {formatDate(venue.updated_at)}
-              </p>
-            </form>
-          ))}
-        </div>
-      </section>
+      <VenueListEditor venues={venues} venueCategories={venueCategories} />
     </main>
   );
 }

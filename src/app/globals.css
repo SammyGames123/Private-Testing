@@ -581,6 +581,156 @@ p {
   gap: 12px;
 }
 
+.admin-venue-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-venue-sidebar {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-venue-toolbar label {
+  display: grid;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.admin-venue-toolbar select {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  padding: 11px 12px;
+  outline: none;
+}
+
+.admin-venue-card-grid {
+  display: grid;
+  gap: 10px;
+  max-height: min(72vh, 880px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.admin-venue-picker-card {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.045);
+  color: white;
+  cursor: pointer;
+  padding: 14px 15px;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.admin-venue-picker-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(114, 241, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.admin-venue-picker-card.selected {
+  border-color: rgba(114, 241, 255, 0.5);
+  background: rgba(114, 241, 255, 0.09);
+  box-shadow: 0 0 0 1px rgba(114, 241, 255, 0.15);
+}
+
+.admin-venue-picker-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-venue-picker-topline strong {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.admin-venue-picker-card p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.82rem;
+}
+
+.admin-venue-picker-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+}
+
+.admin-venue-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(114, 241, 255, 0.14);
+  color: #72f1ff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.admin-venue-editor-shell {
+  min-height: 100%;
+}
+
+.admin-venue-editor-card,
+.admin-venue-empty {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 18px;
+}
+
+.admin-venue-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.admin-venue-editor-header h3,
+.admin-venue-empty h3 {
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  letter-spacing: -0.04em;
+}
+
+.admin-venue-editor-flags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-venue-empty {
+  min-height: 280px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 8px;
+}
+
 .admin-report-card,
 .admin-venue-card {
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -727,6 +877,14 @@ p {
   .admin-map-save-row,
   .admin-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-venue-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-venue-card-grid {
+    max-height: none;
   }
 
   .admin-section-heading,
