@@ -336,11 +336,11 @@ export default async function AdminPage() {
             </label>
             <label>
               Latitude
-              <input name="latitude" step="0.0000001" type="number" />
+              <input inputMode="decimal" name="latitude" step="any" type="number" />
             </label>
             <label>
               Longitude
-              <input name="longitude" step="0.0000001" type="number" />
+              <input inputMode="decimal" name="longitude" step="any" type="number" />
             </label>
             <label className="admin-form-wide">
               Address

@@ -107,7 +107,7 @@ function tileRange(
 }
 
 function formatCoordinate(value: number | null | undefined) {
-  return value == null ? "" : value.toFixed(7);
+  return value == null ? "" : String(value);
 }
 
 export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] }) {
@@ -415,7 +415,8 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
                   }));
                 }
               }}
-              step="0.0000001"
+              inputMode="decimal"
+              step="any"
               type="number"
               value={formatCoordinate(selectedCoordinate.latitude)}
             />
@@ -436,7 +437,8 @@ export function VenueLocationEditor({ venues }: { venues: AdminVenueMapItem[] })
                   }));
                 }
               }}
-              step="0.0000001"
+              inputMode="decimal"
+              step="any"
               type="number"
               value={formatCoordinate(selectedCoordinate.longitude)}
             />
