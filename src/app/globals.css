@@ -602,6 +602,7 @@ p {
   letter-spacing: 0.04em;
 }
 
+.admin-venue-toolbar input,
 .admin-venue-toolbar select {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.11);
@@ -646,6 +647,15 @@ p {
   border-color: rgba(114, 241, 255, 0.5);
   background: rgba(114, 241, 255, 0.09);
   box-shadow: 0 0 0 1px rgba(114, 241, 255, 0.15);
+}
+
+.admin-venue-picker-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.62);
+  padding: 16px;
+  text-align: center;
 }
 
 .admin-venue-picker-topline {

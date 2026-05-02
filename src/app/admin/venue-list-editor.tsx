@@ -25,6 +25,7 @@ type AdminVenueEditorVenue = {
 };
 
 type VenueSortMode = "name" | "active" | "featured";
+type VenueCategoryFilter = "all" | string;
 
 const sortLabels: Record<VenueSortMode, string> = {
   name: "Name",
@@ -69,9 +70,36 @@ export function VenueListEditor({
   venueCategories: string[];
 }) {
   const [sortMode, setSortMode] = useState<VenueSortMode>("name");
+  const [categoryFilter, setCategoryFilter] = useState<VenueCategoryFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(venues[0]?.id ?? null);
 
-  const sortedVenues = sortVenues(venues, sortMode);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredVenues = venues.filter((venue) => {
+    if (categoryFilter !== "all" && (venue.category ?? "bar") !== categoryFilter) {
+      return false;
+    }
+
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    const haystack = [
+      venue.name,
+      venue.slug,
+      venue.area,
+      venue.city,
+      venue.category ?? "",
+      venue.address ?? "",
+      venue.vibe_blurb ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(normalizedQuery);
+  });
+
+  const sortedVenues = sortVenues(filteredVenues, sortMode);
   const selectedVenue =
     sortedVenues.find((venue) => venue.id == selectedVenueId) ??
     venues.find((venue) => venue.id == selectedVenueId) ??
@@ -105,6 +133,25 @@ export function VenueListEditor({
         <aside className="admin-venue-sidebar">
           <div className="admin-venue-toolbar">
             <label>
+              Search venues
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by name, slug, area…"
+              />
+            </label>
+            <label>
+              Venue type
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                <option value="all">All venue types</option>
+                {venueCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Sort venues
               <select value={sortMode} onChange={(event) => setSortMode(event.target.value as VenueSortMode)}>
                 {Object.entries(sortLabels).map(([value, label]) => (
@@ -117,36 +164,43 @@ export function VenueListEditor({
           </div>
 
           <div className="admin-venue-card-grid">
-            {sortedVenues.map((venue) => {
-              const isSelected = venue.id === selectedVenue?.id;
+            {sortedVenues.length ? (
+              sortedVenues.map((venue) => {
+                const isSelected = venue.id === selectedVenue?.id;
 
-              return (
-                <button
-                  key={venue.id}
-                  type="button"
-                  className={`admin-venue-picker-card${isSelected ? " selected" : ""}`}
-                  onClick={() => setSelectedVenueId(venue.id)}
-                >
-                  <div className="admin-venue-picker-topline">
-                    <strong>{venue.name}</strong>
-                    <span className={venue.is_active ? "admin-status status-actioned" : "admin-status status-dismissed"}>
-                      {venue.is_active ? "active" : "hidden"}
-                    </span>
-                  </div>
-                  <p>@{venue.slug}</p>
-                  <div className="admin-venue-picker-meta">
-                    <span>{venue.area}</span>
-                    {venue.featured ? <span className="admin-venue-pill">Featured</span> : null}
-                  </div>
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={venue.id}
+                    type="button"
+                    className={`admin-venue-picker-card${isSelected ? " selected" : ""}`}
+                    onClick={() => setSelectedVenueId(venue.id)}
+                  >
+                    <div className="admin-venue-picker-topline">
+                      <strong>{venue.name}</strong>
+                      <span className={venue.is_active ? "admin-status status-actioned" : "admin-status status-dismissed"}>
+                        {venue.is_active ? "active" : "hidden"}
+                      </span>
+                    </div>
+                    <p>@{venue.slug}</p>
+                    <div className="admin-venue-picker-meta">
+                      <span>{venue.area}</span>
+                      <span>{venue.category ?? "bar"}</span>
+                      {venue.featured ? <span className="admin-venue-pill">Featured</span> : null}
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="admin-venue-picker-empty">
+                <p>No venues match that search right now.</p>
+              </div>
+            )}
           </div>
         </aside>
 
         <div className="admin-venue-editor-shell">
           {selectedVenue ? (
-            <form action={saveVenueAction} className="admin-venue-editor-card">
+            <form action={saveVenueAction} className="admin-venue-editor-card" key={selectedVenue.id}>
               <input name="id" type="hidden" value={selectedVenue.id} />
 
               <div className="admin-venue-editor-header">
