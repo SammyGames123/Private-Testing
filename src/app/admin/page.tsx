@@ -1,10 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 import {
   archiveReportedVideoAction,
+  createFeaturedEventAction,
   createVenueAction,
   deleteReportedVideoAction,
   saveVenueAction,
   sendBroadcastNotificationAction,
+  updateEventSuggestionStatusAction,
+  updateFeaturedEventStatusAction,
   updateReportStatusAction,
 } from "@/app/admin/actions";
 import { VenueListEditor } from "@/app/admin/venue-list-editor";
@@ -64,6 +67,31 @@ type VideoRow = {
   created_at: string;
 };
 
+type FeaturedEventRow = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  venue_id: string | null;
+  venue_name: string;
+  starts_at: string;
+  image_url: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+type EventSuggestionRow = {
+  id: string;
+  suggested_by: string | null;
+  title: string;
+  venue_name: string;
+  event_date: string;
+  status: "open" | "reviewing" | "approved" | "dismissed";
+  admin_note: string | null;
+  linked_event_id: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
 const venueCategories = [
   "bar",
   "nightclub",
@@ -93,6 +121,10 @@ function profileLabel(profile: ProfileRow | undefined, fallbackId: string | null
     return fallbackId.slice(0, 8);
   }
   return profile.display_name || profile.username || fallbackId.slice(0, 8);
+}
+
+function isMissingRelationError(error: { code?: string | null; message?: string | null } | null | undefined) {
+  return error?.code === "42P01" || error?.code === "42703";
 }
 
 async function fetchAdminSnapshot(admin: SupabaseClient) {
@@ -153,12 +185,37 @@ async function fetchAdminSnapshot(admin: SupabaseClient) {
     throw new Error(reportError.message);
   }
 
+  const { data: featuredEventData, error: featuredEventError } = await admin
+    .from("featured_events")
+    .select("id, title, subtitle, venue_id, venue_name, starts_at, image_url, is_active, created_at")
+    .order("starts_at", { ascending: true })
+    .limit(60);
+
+  if (featuredEventError && !isMissingRelationError(featuredEventError)) {
+    throw new Error(featuredEventError.message);
+  }
+
+  const { data: suggestionData, error: suggestionError } = await admin
+    .from("event_suggestions")
+    .select("id, suggested_by, title, venue_name, event_date, status, admin_note, linked_event_id, created_at, resolved_at")
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (suggestionError && !isMissingRelationError(suggestionError)) {
+    throw new Error(suggestionError.message);
+  }
+
   const venues = ((venueData ?? []) as VenueRow[]).map((venue) => ({
     ...venue,
     is_active: Boolean(venue.is_active),
     featured: Boolean(venue.featured),
   }));
   const reports = (reportData ?? []) as ReportRow[];
+  const featuredEvents = ((featuredEventData ?? []) as FeaturedEventRow[]).map((event) => ({
+    ...event,
+    is_active: Boolean(event.is_active),
+  }));
+  const eventSuggestions = (suggestionData ?? []) as EventSuggestionRow[];
 
   const videoIds = Array.from(
     new Set(reports.map((report) => report.target_video_id).filter(Boolean)),
@@ -178,6 +235,7 @@ async function fetchAdminSnapshot(admin: SupabaseClient) {
         ...reports.map((report) => report.reporter_id),
         ...reports.map((report) => report.target_user_id),
         ...videos.map((video) => video.creator_id),
+        ...eventSuggestions.map((suggestion) => suggestion.suggested_by),
       ].filter(Boolean),
     ),
   ) as string[];
@@ -192,6 +250,8 @@ async function fetchAdminSnapshot(admin: SupabaseClient) {
   return {
     venues,
     reports,
+    featuredEvents,
+    eventSuggestions,
     videosById: new Map(videos.map((video) => [video.id, video])),
     profilesById: new Map(((profileData ?? []) as ProfileRow[]).map((profile) => [profile.id, profile])),
   };
@@ -235,10 +295,14 @@ export default async function AdminPage() {
     );
   }
 
-  const { venues, reports, videosById, profilesById } = await fetchAdminSnapshot(admin);
+  const { venues, reports, featuredEvents, eventSuggestions, videosById, profilesById } = await fetchAdminSnapshot(admin);
   const activeVenues = venues.filter((venue) => venue.is_active);
   const hiddenVenues = venues.filter((venue) => !venue.is_active);
   const openReports = reports.filter((report) => report.status === "open" || report.status === "reviewing");
+  const activeEvents = featuredEvents.filter((event) => event.is_active && new Date(event.starts_at).getTime() >= Date.now() - 12 * 60 * 60 * 1000);
+  const openEventSuggestions = eventSuggestions.filter(
+    (suggestion) => suggestion.status === "open" || suggestion.status === "reviewing",
+  );
 
   return (
     <main className="admin-shell">
@@ -263,6 +327,10 @@ export default async function AdminPage() {
           <div>
             <strong>{openReports.length}</strong>
             <span>Open reports</span>
+          </div>
+          <div>
+            <strong>{activeEvents.length}</strong>
+            <span>Live event cards</span>
           </div>
         </div>
       </section>
@@ -306,6 +374,125 @@ export default async function AdminPage() {
         <div className="admin-panel">
           <div className="admin-section-heading">
             <div>
+              <p className="admin-kicker">Map cards</p>
+              <h2>Add event</h2>
+            </div>
+          </div>
+
+          <form action={createFeaturedEventAction} className="admin-form-grid" encType="multipart/form-data">
+            <label>
+              Event title
+              <input name="title" maxLength={80} placeholder="Friday at Elsewhere" required />
+            </label>
+            <label>
+              Venue
+              <select defaultValue="" name="venue_id" required>
+                <option disabled value="">
+                  Select a venue
+                </option>
+                {activeVenues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Event date
+              <input name="starts_at" required type="datetime-local" />
+            </label>
+            <label className="admin-form-wide">
+              Event subtitle
+              <textarea
+                className="admin-form-textarea"
+                name="subtitle"
+                maxLength={140}
+                placeholder="What should users know at a glance?"
+                rows={3}
+              />
+            </label>
+            <label className="admin-form-wide">
+              Event image
+              <input accept="image/*" name="image" required type="file" />
+            </label>
+            <label className="admin-checkbox">
+              <input defaultChecked name="is_active" type="checkbox" />
+              Show on app
+            </label>
+            <p className="admin-meta-line admin-form-wide">
+              Event cards automatically stop showing in the app 12 hours after the event time passes.
+            </p>
+            <button className="admin-primary-button admin-form-wide" type="submit">
+              Add event
+            </button>
+          </form>
+        </div>
+
+        <div className="admin-panel">
+          <div className="admin-section-heading">
+            <div>
+              <p className="admin-kicker">User leads</p>
+              <h2>Event recommendations</h2>
+            </div>
+          </div>
+
+          <div className="admin-report-list">
+            {openEventSuggestions.length ? (
+              openEventSuggestions.map((suggestion) => {
+                const suggester = suggestion.suggested_by ? profilesById.get(suggestion.suggested_by) : undefined;
+
+                return (
+                  <article className="admin-report-card" key={suggestion.id}>
+                    <div className="admin-report-topline">
+                      <span className={`admin-status status-${suggestion.status}`}>{suggestion.status}</span>
+                      <span>{formatDate(suggestion.created_at)}</span>
+                    </div>
+                    <h3>{suggestion.title}</h3>
+                    <p>
+                      {suggestion.venue_name} • {formatDate(suggestion.event_date)}
+                    </p>
+                    <dl>
+                      <div>
+                        <dt>Suggested by</dt>
+                        <dd>{profileLabel(suggester, suggestion.suggested_by)}</dd>
+                      </div>
+                      {suggestion.linked_event_id ? (
+                        <div>
+                          <dt>Linked event</dt>
+                          <dd>{suggestion.linked_event_id.slice(0, 8)}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+
+                    <div className="admin-action-row">
+                      <form action={updateEventSuggestionStatusAction}>
+                        <input name="id" type="hidden" value={suggestion.id} />
+                        <input name="status" type="hidden" value="reviewing" />
+                        <button type="submit">Reviewing</button>
+                      </form>
+                      <form action={updateEventSuggestionStatusAction}>
+                        <input name="id" type="hidden" value={suggestion.id} />
+                        <input name="status" type="hidden" value="dismissed" />
+                        <button type="submit">Dismiss</button>
+                      </form>
+                      <form action={updateEventSuggestionStatusAction}>
+                        <input name="id" type="hidden" value={suggestion.id} />
+                        <input name="status" type="hidden" value="approved" />
+                        <button type="submit">Mark approved</button>
+                      </form>
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <p className="admin-empty">No user-submitted event leads yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="admin-panel">
+          <div className="admin-section-heading">
+            <div>
               <p className="admin-kicker">Add venue</p>
               <h2>New nightlife spot</h2>
             </div>
@@ -336,11 +523,11 @@ export default async function AdminPage() {
             </label>
             <label>
               Latitude
-              <input inputMode="decimal" name="latitude" step="any" type="number" />
+              <input name="latitude" step="0.0000001" type="number" />
             </label>
             <label>
               Longitude
-              <input inputMode="decimal" name="longitude" step="any" type="number" />
+              <input name="longitude" step="0.0000001" type="number" />
             </label>
             <label className="admin-form-wide">
               Address
@@ -435,7 +622,7 @@ export default async function AdminPage() {
                             <input name="report_id" type="hidden" value={report.id} />
                             <input name="video_id" type="hidden" value={video.id} />
                             <button className="danger" type="submit">
-                              Archive post
+                              Archive video
                             </button>
                           </form>
                           <form action={deleteReportedVideoAction}>
@@ -465,6 +652,50 @@ export default async function AdminPage() {
           </div>
         </div>
       </section>
+
+      <section className="admin-panel">
+        <div className="admin-section-heading">
+          <div>
+            <p className="admin-kicker">Events</p>
+            <h2>Current event cards</h2>
+          </div>
+          <p>{activeEvents.length} active in app</p>
+        </div>
+
+        <div className="admin-report-list">
+          {activeEvents.length ? (
+            activeEvents.map((event) => (
+              <article className="admin-report-card" key={event.id}>
+                <div className="admin-report-topline">
+                  <span className={`admin-status ${event.is_active ? "status-actioned" : "status-dismissed"}`}>
+                    {event.is_active ? "live" : "hidden"}
+                  </span>
+                  <span>{formatDate(event.starts_at)}</span>
+                </div>
+                <h3>{event.title}</h3>
+                <p>{event.subtitle || event.venue_name}</p>
+                {event.image_url ? (
+                  <div className="admin-report-media">
+                    <img alt={event.title} src={event.image_url} />
+                  </div>
+                ) : null}
+                <div className="admin-action-row">
+                  <form action={updateFeaturedEventStatusAction}>
+                    <input name="id" type="hidden" value={event.id} />
+                    <input name="is_active" type="hidden" value="false" />
+                    <button className="danger" type="submit">
+                      Remove from app
+                    </button>
+                  </form>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="admin-empty">No active event cards yet.</p>
+          )}
+        </div>
+      </section>
+
       <VenueListEditor venues={venues} venueCategories={venueCategories} />
     </main>
   );

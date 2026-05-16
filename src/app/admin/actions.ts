@@ -1,9 +1,8 @@
 "use server";
 
-import { recordAdminAudit } from "@/lib/admin-audit";
-import { broadcastAnnouncement } from "@/lib/push-broadcast";
 import { requireAdminClient } from "@/lib/admin";
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -23,6 +22,20 @@ function numberValue(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function booleanValue(formData: FormData, key: string) {
+  return formData.get(key) === "on";
+}
+
+function datetimeValue(formData: FormData, key: string) {
+  const raw = stringValue(formData, key);
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function storagePathFromPublicUrl(publicUrl: string | null, bucketId: string) {
   if (!publicUrl) {
     return null;
@@ -40,6 +53,94 @@ function storagePathFromPublicUrl(publicUrl: string | null, bucketId: string) {
   } catch {
     return null;
   }
+}
+
+function functionsBaseUrl() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL.");
+  }
+
+  const url = new URL(supabaseUrl);
+  const projectRef = url.hostname.split(".")[0];
+  return `https://${projectRef}.functions.supabase.co`;
+}
+
+function requirePushWebhookSecret() {
+  const secret = process.env.PUSH_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new Error("Admin bulk notifications need PUSH_WEBHOOK_SECRET configured in Vercel.");
+  }
+  return secret;
+}
+
+function chunk<T>(items: T[], size: number) {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+async function recordAdminAction(
+  admin: SupabaseClient,
+  actorId: string,
+  action: string,
+  targetType: string,
+  targetId: string | null,
+  metadata: Record<string, unknown> = {},
+) {
+  // The audit table is created by supabase/admin_mvp.sql. Do not block the
+  // admin workflow if the migration has not been applied yet.
+  try {
+    await admin.from("admin_audit_log").insert({
+      actor_id: actorId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      metadata,
+    });
+  } catch {
+    // Optional audit table is missing or temporarily unavailable.
+  }
+}
+
+async function resolveVenueName(admin: SupabaseClient, venueId: string) {
+  const { data, error } = await admin
+    .from("venues")
+    .select("id, name")
+    .eq("id", venueId)
+    .limit(1)
+    .single();
+
+  if (error || !data?.name) {
+    throw new Error("Choose a valid venue for this event.");
+  }
+
+  return data.name as string;
+}
+
+async function uploadEventImage(admin: SupabaseClient, eventId: string, file: File) {
+  if (!file || file.size === 0) {
+    throw new Error("An event image is required.");
+  }
+
+  const extension = file.name.includes(".")
+    ? file.name.split(".").pop()?.toLowerCase() || "jpg"
+    : "jpg";
+  const path = `${eventId}/hero.${extension}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await admin.storage.from("event-images").upload(path, bytes, {
+    contentType: file.type || "image/jpeg",
+    upsert: true,
+  });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  return admin.storage.from("event-images").getPublicUrl(path).data.publicUrl;
 }
 
 export async function saveVenueAction(formData: FormData) {
@@ -73,45 +174,10 @@ export async function saveVenueAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  await recordAdminAudit(admin, user.id, "venue.update", "venue", id, {
+  await recordAdminAction(admin, user.id, "venue.update", "venue", id, {
     name: payload.name,
     latitude: payload.latitude,
     longitude: payload.longitude,
-  });
-
-  revalidatePath("/admin");
-}
-
-export async function deleteVenueAction(formData: FormData) {
-  const { admin, user } = await requireAdminClient();
-  const id = stringValue(formData, "id");
-
-  if (!id) {
-    throw new Error("Missing venue id.");
-  }
-
-  const { data: existingVenue, error: fetchError } = await admin
-    .from("venues")
-    .select("id, name, slug")
-    .eq("id", id)
-    .maybeSingle<{ id: string; name: string; slug: string }>();
-
-  if (fetchError) {
-    throw new Error(fetchError.message);
-  }
-
-  if (!existingVenue) {
-    throw new Error("Venue not found.");
-  }
-
-  const { error } = await admin.from("venues").delete().eq("id", id);
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  await recordAdminAudit(admin, user.id, "venue.delete", "venue", id, {
-    name: existingVenue.name,
-    slug: existingVenue.slug,
   });
 
   revalidatePath("/admin");
@@ -154,9 +220,164 @@ export async function createVenueAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  await recordAdminAudit(admin, user.id, "venue.create", "venue", data.id, {
+  await recordAdminAction(admin, user.id, "venue.create", "venue", data.id, {
     name,
     slug,
+  });
+
+  revalidatePath("/admin");
+}
+
+export async function deleteVenueAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+  const id = stringValue(formData, "id");
+
+  if (!id) {
+    throw new Error("Missing venue id.");
+  }
+
+  const { data: existingVenue, error: fetchError } = await admin
+    .from("venues")
+    .select("id, name, slug")
+    .eq("id", id)
+    .maybeSingle<{ id: string; name: string; slug: string }>();
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  if (!existingVenue) {
+    throw new Error("Venue not found.");
+  }
+
+  const { error } = await admin.from("venues").delete().eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recordAdminAction(admin, user.id, "venue.delete", "venue", id, {
+    name: existingVenue.name,
+    slug: existingVenue.slug,
+  });
+
+  revalidatePath("/admin");
+}
+
+export async function createFeaturedEventAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+
+  const title = stringValue(formData, "title");
+  const subtitle = nullableStringValue(formData, "subtitle");
+  const venueId = stringValue(formData, "venue_id");
+  const startsAt = datetimeValue(formData, "starts_at");
+  const sourceSuggestionId = nullableStringValue(formData, "source_suggestion_id");
+  const isActive = booleanValue(formData, "is_active");
+  const image = formData.get("image");
+
+  if (!title || !venueId || !startsAt) {
+    throw new Error("Title, venue, and event date are required.");
+  }
+
+  if (!(image instanceof File) || image.size === 0) {
+    throw new Error("An event image is required.");
+  }
+
+  const eventId = crypto.randomUUID();
+  const venueName = await resolveVenueName(admin, venueId);
+  const imageUrl = await uploadEventImage(admin, eventId, image);
+
+  const { error } = await admin.from("featured_events").insert({
+    id: eventId,
+    title,
+    subtitle,
+    venue_id: venueId,
+    venue_name: venueName,
+    starts_at: startsAt,
+    image_url: imageUrl,
+    is_active: isActive,
+    created_by: user.id,
+    source_suggestion_id: sourceSuggestionId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (sourceSuggestionId) {
+    await admin
+      .from("event_suggestions")
+      .update({
+        status: "approved",
+        linked_event_id: eventId,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", sourceSuggestionId);
+  }
+
+  await recordAdminAction(admin, user.id, "event.create", "featured_event", eventId, {
+    title,
+    venue_id: venueId,
+    starts_at: startsAt,
+  });
+
+  revalidatePath("/admin");
+}
+
+export async function updateFeaturedEventStatusAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+  const id = stringValue(formData, "id");
+  const isActive = stringValue(formData, "is_active");
+
+  if (!id || !["true", "false"].includes(isActive)) {
+    throw new Error("Invalid event update.");
+  }
+
+  const nextValue = isActive === "true";
+  const { error } = await admin
+    .from("featured_events")
+    .update({
+      is_active: nextValue,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recordAdminAction(admin, user.id, "event.status", "featured_event", id, {
+    is_active: nextValue,
+  });
+
+  revalidatePath("/admin");
+}
+
+export async function updateEventSuggestionStatusAction(formData: FormData) {
+  const { admin, user } = await requireAdminClient();
+  const id = stringValue(formData, "id");
+  const status = stringValue(formData, "status");
+  const adminNote = nullableStringValue(formData, "admin_note");
+
+  if (!id || !["open", "reviewing", "approved", "dismissed"].includes(status)) {
+    throw new Error("Invalid suggestion status.");
+  }
+
+  const { error } = await admin
+    .from("event_suggestions")
+    .update({
+      status,
+      admin_note: adminNote,
+      resolved_at: status === "approved" || status === "dismissed" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await recordAdminAction(admin, user.id, "event_suggestion.status", "event_suggestion", id, {
+    status,
   });
 
   revalidatePath("/admin");
@@ -189,7 +410,7 @@ export async function updateVenueCoordinatesAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  await recordAdminAudit(admin, user.id, "venue.move", "venue", id, {
+  await recordAdminAction(admin, user.id, "venue.move", "venue", id, {
     name,
     slug,
     latitude,
@@ -220,7 +441,7 @@ export async function updateReportStatusAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  await recordAdminAudit(admin, user.id, "report.status", "content_report", id, {
+  await recordAdminAction(admin, user.id, "report.status", "content_report", id, {
     status,
   });
 
@@ -261,7 +482,7 @@ export async function archiveReportedVideoAction(formData: FormData) {
     throw new Error(reportError.message);
   }
 
-  await recordAdminAudit(admin, user.id, "video.archive_from_report", "video", videoId, {
+  await recordAdminAction(admin, user.id, "video.archive_from_report", "video", videoId, {
     report_id: reportId,
   });
 
@@ -324,7 +545,7 @@ export async function deleteReportedVideoAction(formData: FormData) {
     }
   }
 
-  await recordAdminAudit(admin, user.id, "video.delete_from_report", "video", videoId, {
+  await recordAdminAction(admin, user.id, "video.delete_from_report", "video", videoId, {
     report_id: reportId,
     removed_paths: Array.from(storagePaths),
   });
@@ -341,15 +562,98 @@ export async function sendBroadcastNotificationAction(formData: FormData) {
     throw new Error("Broadcast title and message are required.");
   }
 
-  const result = await broadcastAnnouncement(admin, { title, body });
+  const { data: tokenRows, error: tokenError } = await admin
+    .from("device_push_tokens")
+    .select("user_id");
 
-  await recordAdminAudit(admin, user.id, "push.broadcast", "push_broadcast", null, {
+  if (tokenError) {
+    throw new Error(tokenError.message);
+  }
+
+  const userIds = Array.from(
+    new Set(
+      ((tokenRows ?? []) as Array<{ user_id: string | null }>)
+        .map((row) => row.user_id?.toLowerCase())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  if (!userIds.length) {
+    throw new Error("No registered push recipients were found.");
+  }
+
+  const webhookSecret = requirePushWebhookSecret();
+  const endpoint = `${functionsBaseUrl()}/send-push`;
+  let deliveredUsers = 0;
+  let skippedUsers = 0;
+  let failedUsers = 0;
+
+  for (const batch of chunk(userIds, 25)) {
+    const results = await Promise.allSettled(
+      batch.map(async (userId) => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Secret": webhookSecret,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            category: "announcements",
+            title,
+            body,
+            data: {
+              category: "announcements",
+            },
+          }),
+        });
+
+        let payload: Record<string, unknown> | null = null;
+        try {
+          payload = (await response.json()) as Record<string, unknown>;
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            typeof payload?.error === "string" && payload.error.length > 0
+              ? payload.error
+              : `Push request failed with status ${response.status}.`,
+          );
+        }
+
+        return payload;
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status !== "fulfilled") {
+        failedUsers += 1;
+        continue;
+      }
+
+      const payload = result.value;
+      if (payload && payload.skipped === true) {
+        skippedUsers += 1;
+        continue;
+      }
+
+      if (payload && typeof payload.sent === "number" && payload.sent > 0) {
+        deliveredUsers += 1;
+      } else {
+        skippedUsers += 1;
+      }
+    }
+  }
+
+  await recordAdminAction(admin, user.id, "push.broadcast", "push_broadcast", null, {
     title,
     body,
-    recipients_considered: result.recipientsConsidered,
-    delivered_users: result.deliveredUsers,
-    skipped_users: result.skippedUsers,
-    failed_users: result.failedUsers,
+    recipients_considered: userIds.length,
+    delivered_users: deliveredUsers,
+    skipped_users: skippedUsers,
+    failed_users: failedUsers,
   });
 
   revalidatePath("/admin");
